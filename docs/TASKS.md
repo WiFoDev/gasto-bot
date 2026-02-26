@@ -11,7 +11,7 @@
 
 ## Phase 0 — Foundation
 
-- [ ] TASK-01: Project scaffolding `⚡ CRITICAL PATH`
+- [x] TASK-01: Project scaffolding `⚡ CRITICAL PATH`
   - Scope: `package.json`, `tsconfig.json`, `.gitignore`, `.env.example`
   - Details: `npm init`. Install deps: `fastify`, `@supabase/supabase-js`, `@anthropic-ai/sdk`. Dev deps: `typescript`, `vitest`, `tsx`, `@types/node`. Configure `tsconfig.json` (ESM, strict, NodeNext). Add `.env.example` with all var names (no values). Set up `scripts`: `dev`, `build`, `start`, `test`.
   - Tests: none — verify with `npx tsc --noEmit`
