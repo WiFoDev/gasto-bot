@@ -29,7 +29,7 @@
   - Tests: `tests/unit/config.test.ts` — missing var throws, defaults applied correctly
   - Depends on: TASK-01
 
-- [ ] TASK-04: Database schema `⚡ CRITICAL PATH`
+- [x] TASK-04: Database schema `⚡ CRITICAL PATH`
   - Scope: create `migrations/001_initial.sql`
   - Details: Create tables `users`, `categories`, `expenses` (with `deleted_at` for soft delete), `budgets`. Add indexes: `idx_expenses_user_date(user_id, date DESC)`, `idx_expenses_user_category(user_id, category_id)`, `idx_budgets_user_active(user_id, category_id, period)`. Run against Supabase project.
   - Tests: verify tables exist via Supabase dashboard or `\dt` in SQL editor
