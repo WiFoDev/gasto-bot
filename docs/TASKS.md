@@ -23,7 +23,7 @@
   - Tests: none — TS compiler validates
   - Depends on: TASK-01
 
-- [ ] TASK-03: Config & env validation
+- [x] TASK-03: Config & env validation
   - Scope: create `src/config.ts`
   - Details: Load and validate env vars at import time: `SUPABASE_URL`, `SUPABASE_KEY`, `ANTHROPIC_API_KEY`, `KAPSO_API_KEY`, `KAPSO_WEBHOOK_SECRET`, `PORT` (default 3000). Export constants: `CONFIDENCE_AUTO_LOG = 0.85`, `CONFIDENCE_CONFIRM = 0.6`, `STATE_TTL_MS = 300_000` (5 min), `DEFAULT_TIMEZONE = 'America/Lima'`, `DEFAULT_CURRENCY = 'PEN'`. Throw on missing required vars.
   - Tests: `tests/unit/config.test.ts` — missing var throws, defaults applied correctly
