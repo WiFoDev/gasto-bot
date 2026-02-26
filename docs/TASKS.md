@@ -17,7 +17,7 @@
   - Tests: none — verify with `npx tsc --noEmit`
   - Depends on: none
 
-- [ ] TASK-02: TypeScript interfaces `⚡ CRITICAL PATH`
+- [x] TASK-02: TypeScript interfaces `⚡ CRITICAL PATH`
   - Scope: create `src/types.ts`
   - Details: Define all shared types: `User`, `Category`, `Expense`, `Budget`, `ParseResult` (with intent union: `log_expense | query_summary | set_budget | query_budget | correct_expense | delete_expense | help | unknown | error`), `ReceiptResult`, `ConversationState`, `SummaryQuery`, `SummaryResult`. Every data shape that crosses module boundaries lives here.
   - Tests: none — TS compiler validates
