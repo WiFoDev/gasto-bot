@@ -69,7 +69,7 @@
 
 ## Phase 2 — Data Layer
 
-- [ ] TASK-09: Database client & core queries `⚡ CRITICAL PATH`
+- [x] TASK-09: Database client & core queries `⚡ CRITICAL PATH`
   - Scope: create `src/db.ts`
   - Details: Init Supabase client from config. Implement functions: `getUserByPhone(phone)`, `getCategories(userId)`, `getCategoryBySlug(userId, slug)`, `insertExpense(data)` → returns inserted row, `getExpenseById(id)`, `getLastExpense(userId)` (excluding soft-deleted), `updateExpense(id, fields)`, `softDeleteExpense(id)`. All queries filter `deleted_at IS NULL` by default. All functions return typed results using interfaces from `types.ts`.
   - Tests: `tests/integration/db.test.ts` — insert → read → update → soft-delete → verify filtered out. Use real Supabase (test data, clean up after).
