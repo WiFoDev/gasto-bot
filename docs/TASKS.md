@@ -35,7 +35,7 @@
   - Tests: verify tables exist via Supabase dashboard or `\dt` in SQL editor
   - Depends on: TASK-01
 
-- [ ] TASK-05: Seed default categories `⚡ CRITICAL PATH`
+- [x] TASK-05: Seed default categories `⚡ CRITICAL PATH`
   - Scope: create `seed.sql`
   - Details: Insert your user row (phone number, `PEN`, `America/Lima`). Insert 9 default categories linked to that user: `food_dining`, `transport`, `groceries`, `entertainment`, `health`, `shopping`, `bills_utilities`, `education`, `other` — each with display name and emoji icon. Run against Supabase.
   - Tests: query `SELECT * FROM categories` — verify 9 rows with correct slugs
