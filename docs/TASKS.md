@@ -51,7 +51,7 @@
   - Tests: manual — paste prompt + sample message into Claude API console, verify JSON output
   - Depends on: TASK-02
 
-- [ ] TASK-07: Text parsing module `⚡ CRITICAL PATH`
+- [x] TASK-07: Text parsing module `⚡ CRITICAL PATH`
   - Scope: create `src/parse.ts`
   - Details: `parseMessage(text: string, categories: Category[]): Promise<ParseResult>`. Initialize Anthropic client. Build messages array with system prompt from TASK-06. Call `claude-sonnet` with `max_tokens: 1024`, `temperature: 0`. Parse JSON from response. Handle: malformed JSON (return `intent: 'error'`), API timeout, API error. Do NOT retry — return error intent and let handler deal with it.
   - Tests: mock Anthropic client, verify JSON parsing, verify error handling
