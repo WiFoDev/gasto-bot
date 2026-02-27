@@ -93,14 +93,14 @@ cd ../[project]-task-YY && claude
 # Claude will auto-detect branch fix/task-YY and pick up TASK-YY
 ```
 
-### Merge Back (after all tasks in batch complete)
+### Rebase Back (after all tasks in batch complete)
 
 ```bash
 cd /path/to/main/project
 
-# Merge each branch
-git merge feat/task-XX
-git merge fix/task-YY      # resolve conflicts if any
+# Rebase each branch
+git rebase feat/task-XX
+git rebase fix/task-YY      # resolve conflicts if any
 
 # Verify the merged result
 pnpm install                # in case dependencies changed
