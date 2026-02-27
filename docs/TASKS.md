@@ -91,7 +91,7 @@
   - Tests: `tests/unit/state.test.ts` — set → get returns it, get after TTL returns null, clear works, state transitions (null → awaiting_description → null).
   - Depends on: TASK-02, TASK-03
 
-- [ ] TASK-12: Core message handler `⚡ CRITICAL PATH`
+- [x] TASK-12: Core message handler `⚡ CRITICAL PATH`
   - Scope: create `src/handler.ts`
   - Details: `handleMessage(phone: string, type: 'text' | 'image', content: string): Promise<string>`. This is the brain. Logic: (1) Get user by phone. (2) Check conversation state — if `awaiting_description`, treat content as the missing description and complete the pending expense. If `awaiting_confirmation`, treat "yes"/"si" as confirm, anything else as correction. (3) If no active state: call `parseMessage()`. (4) Route by intent: `log_expense` → check confidence → auto-log / confirm / clarify. `query_summary` → delegate to summary logic. `set_budget` / `query_budget` → delegate to budget logic. `correct_expense` / `delete_expense` → delegate to correction/deletion. `help` → return help text. `unknown` / `error` → return error message. (5) Update conversation state as needed. (6) Return formatted response string. Start with `log_expense` + `help` + `unknown` intents only. Other intents added in Phase 4-5.
   - Tests: `tests/integration/handler.test.ts` — mock parse.ts to return known `ParseResult`s. Test: high-confidence auto-logs, mid-confidence asks confirmation, low-confidence asks clarification, state transitions on follow-ups.
