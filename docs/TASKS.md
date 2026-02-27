@@ -79,7 +79,7 @@
 
 ## Phase 3 — Core Loop Assembly
 
-- [ ] TASK-10: Response formatter
+- [x] TASK-10: Response formatter
   - Scope: create `src/formatter.ts`
   - Details: Pure functions, no side effects. `formatExpenseConfirmation(expense, category)` → "✅ S/35.00 — Food & Dining\n\"almuerzo\" · Feb 25". `formatClarification(pendingExpense)` → "Got it — S/50.00. What was it for?". `formatError()` → "Something went wrong, try again." `formatHelp()` → list of commands. All strings optimized for WhatsApp rendering (emoji, newlines, no markdown).
   - Tests: `tests/unit/formatter.test.ts` — snapshot each format function output. Test edge cases: zero amount, long description, missing merchant, multi-currency.
