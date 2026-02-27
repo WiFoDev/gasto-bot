@@ -45,7 +45,7 @@
 
 ## Phase 1 — AI Parsing & Validation
 
-- [ ] TASK-06: Expense parser system prompt `⚡ CRITICAL PATH`
+- [x] TASK-06: Expense parser system prompt `⚡ CRITICAL PATH`
   - Scope: create `src/prompts/expense-parser.ts`
   - Details: Single system prompt that instructs Claude to: (1) classify intent from the 8-type union, (2) extract structured fields (amount, currency, category slug, description, merchant, date) for `log_expense`, (3) extract query params (period, category) for summary/budget intents, (4) return confidence score. Include: list of valid category slugs, bilingual examples (Spanish/English/mixed), date inference rules ("today" if not specified), currency rules (default PEN, detect "dollars"/"$" for USD). Export as template string function that accepts category list.
   - Tests: manual — paste prompt + sample message into Claude API console, verify JSON output
