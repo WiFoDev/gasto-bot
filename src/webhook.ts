@@ -1,6 +1,6 @@
+import crypto from 'node:crypto';
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { WhatsAppClient } from '@kapso/whatsapp-cloud-api';
-import { verifySignature } from '@kapso/whatsapp-cloud-api/server';
 import { KAPSO_API_KEY, KAPSO_WEBHOOK_SECRET } from './config.js';
 import type { KapsoWebhookPayload, MessageHandler } from './types.js';
 
@@ -8,14 +8,6 @@ import type { KapsoWebhookPayload, MessageHandler } from './types.js';
 
 export interface WebhookPluginOptions {
   handleMessage: MessageHandler;
-}
-
-// ── Augment Fastify request for raw body ─────────────────────────
-
-declare module 'fastify' {
-  interface FastifyRequest {
-    rawBody?: Buffer;
-  }
 }
 
 // ── Plugin ───────────────────────────────────────────────────────
@@ -31,20 +23,6 @@ const webhookPlugin: FastifyPluginAsync<WebhookPluginOptions> = async (
     kapsoApiKey: KAPSO_API_KEY,
   });
 
-  // Capture raw body within this plugin scope for signature verification
-  fastify.addContentTypeParser(
-    'application/json',
-    { parseAs: 'buffer' },
-    (req, body, done) => {
-      req.rawBody = body as Buffer;
-      try {
-        done(null, JSON.parse((body as Buffer).toString()));
-      } catch (err) {
-        done(err as Error, undefined);
-      }
-    },
-  );
-
   // ── Health check ─────────────────────────────────────────────
 
   fastify.get('/health', async () => {
@@ -54,17 +32,34 @@ const webhookPlugin: FastifyPluginAsync<WebhookPluginOptions> = async (
   // ── Webhook ──────────────────────────────────────────────────
 
   fastify.post('/webhook', async (request, reply) => {
-    // Verify signature (check both Kapso and Meta header names)
-    const signature =
-      (request.headers['x-webhook-signature'] as string | undefined) ??
-      (request.headers['x-hub-signature-256'] as string | undefined);
+    // Verify webhook signature per Kapso docs:
+    // HMAC-SHA256 of JSON.stringify(body) with webhook secret, compared as hex
+    const signature = request.headers['x-webhook-signature'] as
+      | string
+      | undefined;
+
+    if (!signature) {
+      console.log(
+        JSON.stringify({
+          event: 'webhook_rejected',
+          reason: 'invalid_signature',
+          timestamp: new Date().toISOString(),
+        }),
+      );
+      return reply.status(401).send({ error: 'Invalid signature' });
+    }
+
+    const expected = crypto
+      .createHmac('sha256', KAPSO_WEBHOOK_SECRET)
+      .update(JSON.stringify(request.body))
+      .digest('hex');
+
+    const sigBuf = Buffer.from(signature);
+    const expBuf = Buffer.from(expected);
 
     if (
-      !verifySignature({
-        appSecret: KAPSO_WEBHOOK_SECRET,
-        rawBody: request.rawBody!,
-        signatureHeader: signature,
-      })
+      sigBuf.length !== expBuf.length ||
+      !crypto.timingSafeEqual(sigBuf, expBuf)
     ) {
       console.log(
         JSON.stringify({

@@ -86,8 +86,12 @@ async function handleLogExpense(
     ai_confidence: result.confidence,
   };
 
-  // High confidence — auto-log
-  if (result.confidence >= CONFIDENCE_AUTO_LOG) {
+  // If category is unknown/other, ask for clarification regardless of confidence
+  const needsClarification =
+    !result.category_slug || result.category_slug === 'other';
+
+  // High confidence — auto-log (unless we need a description)
+  if (result.confidence >= CONFIDENCE_AUTO_LOG && !needsClarification) {
     const { expense, category } = await resolveAndInsertExpense(user, pending, categories);
     setState(phone, {
       lastAction: 'expense_logged',
@@ -98,8 +102,8 @@ async function handleLogExpense(
     return formatExpenseConfirmation(expense, category);
   }
 
-  // Mid confidence — ask for confirmation
-  if (result.confidence >= CONFIDENCE_CONFIRM) {
+  // Mid confidence — ask for confirmation (unless we need a description)
+  if (result.confidence >= CONFIDENCE_CONFIRM && !needsClarification) {
     setState(phone, {
       lastAction: 'awaiting_confirmation',
       pendingExpense: pending,
@@ -135,8 +139,9 @@ export async function handleMessage(
   type: 'text' | 'image',
   content: string,
 ): Promise<string> {
-  // 1. Get user
-  const user = await getUserByPhone(phone);
+  // 1. Get user — normalize phone to E.164 (+country format)
+  const normalizedPhone = phone.startsWith('+') ? phone : `+${phone}`;
+  const user = await getUserByPhone(normalizedPhone);
   if (!user) {
     return formatError();
   }
@@ -150,9 +155,16 @@ export async function handleMessage(
   const state = getState(phone);
   const categories = await getCategories(user.id);
 
-  // 4. Handle awaiting_description — treat reply as the missing description
+  // 4. Handle awaiting_description — treat reply as category or description
   if (state?.lastAction === 'awaiting_description' && state.pendingExpense) {
-    const pending = { ...state.pendingExpense, description: content };
+    // Check if the reply matches a category name/slug
+    const replyLower = content.trim().toLowerCase();
+    const matchedCategory = categories.find(
+      (c) => c.slug === replyLower || c.name.toLowerCase() === replyLower,
+    );
+    const pending = matchedCategory
+      ? { ...state.pendingExpense, category_slug: matchedCategory.slug, description: content }
+      : { ...state.pendingExpense, description: content };
     const { expense, category } = await resolveAndInsertExpense(user, pending, categories);
     setState(phone, {
       lastAction: 'expense_logged',

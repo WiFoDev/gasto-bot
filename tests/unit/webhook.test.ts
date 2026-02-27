@@ -16,29 +16,6 @@ vi.mock('@kapso/whatsapp-cloud-api', () => ({
   },
 }));
 
-vi.mock('@kapso/whatsapp-cloud-api/server', () => ({
-  verifySignature: ({
-    appSecret,
-    rawBody,
-    signatureHeader,
-  }: {
-    appSecret: string;
-    rawBody: Buffer | string;
-    signatureHeader?: string;
-  }) => {
-    if (!signatureHeader || typeof signatureHeader !== 'string') return false;
-    const [algo, received] = signatureHeader.split('=');
-    if (algo !== 'sha256' || !received) return false;
-    const body =
-      typeof rawBody === 'string' ? Buffer.from(rawBody) : rawBody;
-    const expected = crypto
-      .createHmac('sha256', appSecret)
-      .update(body)
-      .digest('hex');
-    return expected === received;
-  },
-}));
-
 vi.mock('../../src/config.js', () => ({
   KAPSO_API_KEY: 'test-kapso-key',
   KAPSO_WEBHOOK_SECRET: 'test-webhook-secret',
@@ -48,12 +25,11 @@ vi.mock('../../src/config.js', () => ({
 
 const WEBHOOK_SECRET = 'test-webhook-secret';
 
-function sign(body: string): string {
-  const hmac = crypto
+function sign(payload: Record<string, unknown>): string {
+  return crypto
     .createHmac('sha256', WEBHOOK_SECRET)
-    .update(body)
+    .update(JSON.stringify(payload))
     .digest('hex');
-  return `sha256=${hmac}`;
 }
 
 function makePayload(overrides: Record<string, unknown> = {}) {
@@ -132,24 +108,8 @@ describe('webhook plugin', () => {
   it('rejects request with invalid signature', async () => {
     const { app } = await buildApp();
     const payload = makePayload();
-    const res = await inject(app, payload, 'sha256=bad');
+    const res = await inject(app, payload, 'bad-signature');
     expect(res.statusCode).toBe(401);
-  });
-
-  it('accepts request with x-hub-signature-256 header', async () => {
-    const { app } = await buildApp();
-    const payload = makePayload();
-    const body = JSON.stringify(payload);
-    const res = await app.inject({
-      method: 'POST',
-      url: '/webhook',
-      headers: {
-        'content-type': 'application/json',
-        'x-hub-signature-256': sign(body),
-      },
-      payload: body,
-    });
-    expect(res.statusCode).toBe(200);
   });
 
   // ── Missing fields ───────────────────────────────────────────
@@ -160,8 +120,7 @@ describe('webhook plugin', () => {
       conversation: { phone_number: '+51999' },
       phone_number_id: 'pn_1',
     };
-    const body = JSON.stringify(payload);
-    const res = await inject(app, payload, sign(body));
+    const res = await inject(app, payload, sign(payload));
     expect(res.statusCode).toBe(400);
     expect(res.json()).toEqual({ error: 'Missing required fields' });
   });
@@ -171,16 +130,14 @@ describe('webhook plugin', () => {
     const payload = makePayload({
       conversation: { id: 'conv_1', status: 'active' },
     });
-    const body = JSON.stringify(payload);
-    const res = await inject(app, payload, sign(body));
+    const res = await inject(app, payload, sign(payload));
     expect(res.statusCode).toBe(400);
   });
 
   it('returns 400 when phone_number_id is missing', async () => {
     const { app } = await buildApp();
     const payload = makePayload({ phone_number_id: undefined });
-    const body = JSON.stringify(payload);
-    const res = await inject(app, payload, sign(body));
+    const res = await inject(app, payload, sign(payload));
     expect(res.statusCode).toBe(400);
   });
 
@@ -190,8 +147,7 @@ describe('webhook plugin', () => {
     const handler = vi.fn().mockResolvedValue('Logged S/35.00');
     const { app } = await buildApp(handler);
     const payload = makePayload();
-    const body = JSON.stringify(payload);
-    const res = await inject(app, payload, sign(body));
+    const res = await inject(app, payload, sign(payload));
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ status: 'ok' });
@@ -225,8 +181,7 @@ describe('webhook plugin', () => {
         },
       },
     });
-    const body = JSON.stringify(payload);
-    const res = await inject(app, payload, sign(body));
+    const res = await inject(app, payload, sign(payload));
 
     expect(res.statusCode).toBe(200);
     expect(handler).toHaveBeenCalledWith(
@@ -248,8 +203,7 @@ describe('webhook plugin', () => {
         kapso: { direction: 'inbound' },
       },
     });
-    const body = JSON.stringify(payload);
-    const res = await inject(app, payload, sign(body));
+    const res = await inject(app, payload, sign(payload));
 
     expect(res.statusCode).toBe(200);
     expect(handler).toHaveBeenCalledWith(
@@ -273,8 +227,7 @@ describe('webhook plugin', () => {
         kapso: { direction: 'outbound' },
       },
     });
-    const body = JSON.stringify(payload);
-    const res = await inject(app, payload, sign(body));
+    const res = await inject(app, payload, sign(payload));
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ status: 'skipped' });
@@ -292,8 +245,7 @@ describe('webhook plugin', () => {
         kapso: { direction: 'inbound' },
       },
     });
-    const body = JSON.stringify(payload);
-    const res = await inject(app, payload, sign(body));
+    const res = await inject(app, payload, sign(payload));
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ status: 'unsupported_type' });
@@ -312,8 +264,7 @@ describe('webhook plugin', () => {
         kapso: { direction: 'inbound' },
       },
     });
-    const body = JSON.stringify(payload);
-    const res = await inject(app, payload, sign(body));
+    const res = await inject(app, payload, sign(payload));
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ status: 'empty_message' });
@@ -326,8 +277,7 @@ describe('webhook plugin', () => {
     const handler = vi.fn().mockRejectedValue(new Error('DB connection lost'));
     const { app } = await buildApp(handler);
     const payload = makePayload();
-    const body = JSON.stringify(payload);
-    const res = await inject(app, payload, sign(body));
+    const res = await inject(app, payload, sign(payload));
 
     expect(res.statusCode).toBe(200);
     expect(mockSendText).toHaveBeenCalledWith(
@@ -342,8 +292,7 @@ describe('webhook plugin', () => {
     mockSendText.mockRejectedValueOnce(new Error('Kapso timeout'));
     const { app } = await buildApp(handler);
     const payload = makePayload();
-    const body = JSON.stringify(payload);
-    const res = await inject(app, payload, sign(body));
+    const res = await inject(app, payload, sign(payload));
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ status: 'ok' });

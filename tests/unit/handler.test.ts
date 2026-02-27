@@ -231,7 +231,7 @@ describe('handleMessage', () => {
       );
     });
 
-    it('defaults to "other" category when slug is null', async () => {
+    it('asks for clarification when category slug is null even at high confidence', async () => {
       mockedParseMessage.mockResolvedValue(
         makeParseResult({
           confidence: 0.9,
@@ -240,11 +240,10 @@ describe('handleMessage', () => {
         }),
       );
 
-      await handleMessage(PHONE, 'text', 'something 50');
+      const result = await handleMessage(PHONE, 'text', 'something 50');
 
-      expect(mockedInsertExpense).toHaveBeenCalledWith(
-        expect.objectContaining({ category_id: 'cat-other' }),
-      );
+      expect(mockedInsertExpense).not.toHaveBeenCalled();
+      expect(result).toContain('What was it for?');
     });
 
     it('defaults to "other" when slug is not found', async () => {

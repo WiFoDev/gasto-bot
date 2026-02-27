@@ -9,6 +9,9 @@
     "test": "vitest run",
     "test:integration": "vitest run --dir tests/integration"
   },
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "license": "ISC",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

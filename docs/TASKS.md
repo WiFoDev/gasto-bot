@@ -109,7 +109,7 @@
   - Tests: manual — `npm run dev`, hit `/health`, verify 200
   - Depends on: TASK-12, TASK-13
 
-- [ ] TASK-15: Deploy to Railway & smoke test `⚡ CRITICAL PATH`
+- [x] TASK-15: Deploy to Railway & smoke test `⚡ CRITICAL PATH`
   - Scope: Railway project config, environment variables
   - Details: Create Railway project. Set all env vars. Deploy. Verify `/health` returns 200. Configure Kapso webhook URL to point to Railway. Send "almuerzo 35 soles" on WhatsApp → verify "✅ S/35.00 — Food & Dining" reply. Send "help" → verify help text. This is the **Week 1 deliverable**.
   - Tests: manual WhatsApp E2E — the list:
