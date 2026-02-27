@@ -188,7 +188,7 @@
   - Tests: manual — test prompt with sample receipt images in Claude console
   - Depends on: TASK-02
 
-- [ ] TASK-23: Receipt accuracy validation `🚧 GATE #2`
+- [x] TASK-23: Receipt accuracy validation `🚧 GATE #2`
   - Scope: create `tests/fixtures/receipts/` (10+ photos), `tests/integration/parse-image.test.ts`
   - Details: Collect 10+ real receipt photos from Lima stores (Plaza Vea, Wong, Metro, bodegas, restaurants). Test each with the receipt parser prompt via Claude Vision API. Measure: correct total extraction, correct merchant extraction.
   - Tests: this IS the test
