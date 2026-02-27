@@ -182,7 +182,7 @@
 
 > **Skip this entire phase if Gate #2 fails.** Move directly to Phase 7.
 
-- [ ] TASK-22: Receipt parser system prompt
+- [x] TASK-22: Receipt parser system prompt
   - Scope: create `src/prompts/receipt-parser.ts`
   - Details: System prompt for Claude Vision: extract total amount (look for "TOTAL", "TOTAL A PAGAR", largest amount), merchant name (header/logo area), date, currency. Handle Lima receipt formats: Plaza Vea, Wong, Metro, bodegas, restaurants. Return structured JSON with confidence score. Include examples of expected output format.
   - Tests: manual — test prompt with sample receipt images in Claude console
