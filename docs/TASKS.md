@@ -97,7 +97,7 @@
   - Tests: `tests/integration/handler.test.ts` — mock parse.ts to return known `ParseResult`s. Test: high-confidence auto-logs, mid-confidence asks confirmation, low-confidence asks clarification, state transitions on follow-ups.
   - Depends on: TASK-07, TASK-09, TASK-10, TASK-11 | **Gate: TASK-08 must pass**
 
-- [ ] TASK-13: Webhook route handler `⚡ CRITICAL PATH`
+- [x] TASK-13: Webhook route handler `⚡ CRITICAL PATH`
   - Scope: create `src/webhook.ts`
   - Details: Fastify route plugin. `POST /webhook`: parse Kapso payload → extract sender phone, message type (text/image/other), content or media URL. Validate webhook signature against `KAPSO_WEBHOOK_SECRET` (reject if invalid). Call `handler.handleMessage()`. Send reply via Kapso SDK. `GET /health`: return `{ status: 'ok' }` for Railway health checks. Handle: missing fields in payload (400), handler errors (500 with friendly reply to user).
   - Tests: manual — `curl` the webhook endpoint with sample Kapso payload shape

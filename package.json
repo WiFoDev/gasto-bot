@@ -12,6 +12,7 @@
   "license": "ISC",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@kapso/whatsapp-cloud-api": "^0.1.1",
     "@supabase/supabase-js": "^2.98.0",
     "fastify": "^5.7.4"
   },

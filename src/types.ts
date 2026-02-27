@@ -109,6 +109,40 @@ export interface ConversationState {
   updatedAt: number;
 }
 
+// ── Handler ──────────────────────────────────────────────────────
+
+export type MessageHandler = (
+  phone: string,
+  type: 'text' | 'image',
+  content: string,
+) => Promise<string>;
+
+// ── Webhook ──────────────────────────────────────────────────────
+
+export interface KapsoWebhookPayload {
+  message: {
+    id: string;
+    type: string;
+    timestamp: string;
+    from?: string;
+    text?: { body?: string };
+    image?: { id?: string; link?: string; caption?: string };
+    kapso?: {
+      direction?: string;
+      hasMedia?: boolean;
+      mediaData?: { url?: string };
+      mediaUrl?: string;
+    };
+  };
+  conversation: {
+    id: string;
+    phone_number: string;
+    status: string;
+  };
+  is_new_conversation: boolean;
+  phone_number_id: string;
+}
+
 // ── Summaries ─────────────────────────────────────────────────────
 
 export interface SummaryQuery {
