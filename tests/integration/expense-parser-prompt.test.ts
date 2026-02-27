@@ -71,7 +71,8 @@ function assertValidShape(result: ParseResult) {
   expect(result).toHaveProperty('error_message');
 }
 
-describe('expense parser prompt smoke test', () => {
+// Skipped: TASK-08 parse.test.ts is a superset of this smoke test
+describe.skip('expense parser prompt smoke test', () => {
   it('parses a simple Spanish expense', async () => {
     const result = await parse('almuerzo 35 soles');
     assertValidShape(result);

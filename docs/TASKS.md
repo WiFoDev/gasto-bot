@@ -57,7 +57,7 @@
   - Tests: mock Anthropic client, verify JSON parsing, verify error handling
   - Depends on: TASK-02, TASK-03, TASK-06
 
-- [ ] TASK-08: Parse accuracy validation `🚧 GATE #1` `⚡ CRITICAL PATH`
+- [x] TASK-08: Parse accuracy validation `🚧 GATE #1` `⚡ CRITICAL PATH`
   - Scope: create `tests/fixtures/messages.ts`, `tests/integration/parse.test.ts`
   - Details: Build corpus of 30+ real messages in your actual texting style. Mix of: simple amounts ("almuerzo 35 soles"), amounts with merchants ("uber 23.5"), English ("lunch 80"), mixed ("groceries en wong 127.50"), summary queries ("how much this week?"), budget commands ("set food budget 800"), corrections ("wrong, it's transport"), deletions ("delete that"), ambiguous ("spent 50"). Run each through `parseMessage()` with real Claude API. Measure: intent accuracy, amount accuracy, category accuracy.
   - Tests: this IS the test — `vitest` test file that calls real API
