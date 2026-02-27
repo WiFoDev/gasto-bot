@@ -103,7 +103,7 @@
   - Tests: manual — `curl` the webhook endpoint with sample Kapso payload shape
   - Depends on: TASK-02, TASK-03
 
-- [ ] TASK-14: Fastify server & wiring `⚡ CRITICAL PATH`
+- [x] TASK-14: Fastify server & wiring `⚡ CRITICAL PATH`
   - Scope: create `src/index.ts`
   - Details: Create Fastify instance. Register webhook plugin from TASK-13. Listen on `PORT` from config. Add graceful shutdown (SIGTERM/SIGINT → `server.close()`). Log startup message with port.
   - Tests: manual — `npm run dev`, hit `/health`, verify 200
