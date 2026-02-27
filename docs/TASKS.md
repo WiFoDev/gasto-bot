@@ -85,7 +85,7 @@
   - Tests: `tests/unit/formatter.test.ts` — snapshot each format function output. Test edge cases: zero amount, long description, missing merchant, multi-currency.
   - Depends on: TASK-02
 
-- [ ] TASK-11: Conversation state manager
+- [x] TASK-11: Conversation state manager
   - Scope: create `src/state.ts`
   - Details: `Map<string, ConversationState>` keyed by phone number. Functions: `getState(phone)` → returns state or null if expired, `setState(phone, state)` → sets with current timestamp, `clearState(phone)`, `isExpired(state)` → checks against `STATE_TTL_MS`. State shape: `{ lastAction, pendingExpense, lastExpenseId, updatedAt }`. No periodic cleanup — check expiry on read.
   - Tests: `tests/unit/state.test.ts` — set → get returns it, get after TTL returns null, clear works, state transitions (null → awaiting_description → null).
