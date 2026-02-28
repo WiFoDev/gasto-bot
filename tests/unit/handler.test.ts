@@ -23,6 +23,9 @@ vi.mock('../../src/db.js', () => ({
   getLastExpense: vi.fn(),
   updateExpense: vi.fn(),
   softDeleteExpense: vi.fn(),
+  upsertBudget: vi.fn(),
+  getBudget: vi.fn(),
+  getExpensesTotal: vi.fn(),
 }));
 
 import { handleMessage } from '../../src/handler.js';
@@ -36,6 +39,9 @@ import {
   getLastExpense,
   updateExpense,
   softDeleteExpense,
+  upsertBudget,
+  getBudget,
+  getExpensesTotal,
 } from '../../src/db.js';
 import { getState, setState, clearState } from '../../src/state.js';
 import { formatHelp, formatError, formatNoExpenseToModify } from '../../src/formatter.js';
@@ -43,6 +49,7 @@ import type {
   User,
   Category,
   Expense,
+  Budget,
   ParseResult,
   PendingExpense,
 } from '../../src/types.js';
@@ -153,6 +160,23 @@ const mockedGetLastExpense = getLastExpense as ReturnType<typeof vi.fn>;
 const mockedUpdateExpense = updateExpense as ReturnType<typeof vi.fn>;
 const mockedSoftDeleteExpense = softDeleteExpense as ReturnType<typeof vi.fn>;
 const mockedParseMessage = parseMessage as ReturnType<typeof vi.fn>;
+const mockedUpsertBudget = upsertBudget as ReturnType<typeof vi.fn>;
+const mockedGetBudget = getBudget as ReturnType<typeof vi.fn>;
+const mockedGetExpensesTotal = getExpensesTotal as ReturnType<typeof vi.fn>;
+
+function makeBudget(overrides: Partial<Budget> = {}): Budget {
+  return {
+    id: 'budget-1',
+    user_id: 'user-1',
+    category_id: 'cat-food',
+    amount: 800,
+    currency: 'PEN',
+    period: 'monthly',
+    start_date: '2026-02-01',
+    created_at: '2026-02-01T00:00:00Z',
+    ...overrides,
+  };
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -181,6 +205,9 @@ beforeEach(() => {
   mockedSoftDeleteExpense.mockImplementation(async (id: string) =>
     makeExpense({ id, deleted_at: new Date().toISOString() }),
   );
+  mockedUpsertBudget.mockResolvedValue(makeBudget());
+  mockedGetBudget.mockResolvedValue(null);
+  mockedGetExpensesTotal.mockResolvedValue(0);
 });
 
 // ── Tests ───────────────────────────────────────────────────────────
@@ -798,15 +825,269 @@ describe('handleMessage', () => {
 
       expect(result).toBe(formatError());
     });
+  });
 
-    it('returns error for set_budget intent', async () => {
+  describe('set_budget intent', () => {
+    it('sets a monthly budget for a category', async () => {
       mockedParseMessage.mockResolvedValue(
-        makeParseResult({ intent: 'set_budget', confidence: 0.9 }),
+        makeParseResult({
+          intent: 'set_budget',
+          confidence: 0.95,
+          amount: 800,
+          currency: 'PEN',
+          category_slug: 'food_dining',
+          period: 'month',
+        }),
       );
 
-      const result = await handleMessage(PHONE, 'text', 'set food budget 800');
+      const result = await handleMessage(PHONE, 'text', 'set food budget 800 monthly');
+
+      expect(result).toContain('💰');
+      expect(result).toContain('Food & Dining');
+      expect(result).toContain('S/800.00');
+      expect(result).toContain('monthly');
+      expect(mockedUpsertBudget).toHaveBeenCalledWith(
+        'user-1',
+        'cat-food',
+        800,
+        'PEN',
+        'monthly',
+        expect.any(String),
+      );
+    });
+
+    it('sets a weekly budget', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'set_budget',
+          confidence: 0.95,
+          amount: 200,
+          currency: 'PEN',
+          category_slug: 'transport',
+          period: 'week',
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'transport budget 200 weekly');
+
+      expect(result).toContain('weekly');
+      expect(mockedUpsertBudget).toHaveBeenCalledWith(
+        'user-1',
+        'cat-transport',
+        200,
+        'PEN',
+        'weekly',
+        expect.any(String),
+      );
+    });
+
+    it('defaults to monthly when period is null', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'set_budget',
+          confidence: 0.95,
+          amount: 500,
+          category_slug: 'food_dining',
+          period: null,
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'budget comida 500');
+
+      expect(result).toContain('monthly');
+      expect(mockedUpsertBudget).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(String),
+        500,
+        'PEN',
+        'monthly',
+        expect.any(String),
+      );
+    });
+
+    it('uses user currency when parse currency is null', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'set_budget',
+          confidence: 0.95,
+          amount: 800,
+          currency: null,
+          category_slug: 'food_dining',
+          period: 'month',
+        }),
+      );
+
+      await handleMessage(PHONE, 'text', 'set food budget 800');
+
+      expect(mockedUpsertBudget).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(String),
+        800,
+        'PEN',
+        expect.any(String),
+        expect.any(String),
+      );
+    });
+
+    it('returns error when amount is missing', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'set_budget',
+          confidence: 0.9,
+          amount: null,
+          category_slug: 'food_dining',
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'set food budget');
 
       expect(result).toBe(formatError());
+      expect(mockedUpsertBudget).not.toHaveBeenCalled();
+    });
+
+    it('returns error when amount is zero', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'set_budget',
+          confidence: 0.9,
+          amount: 0,
+          category_slug: 'food_dining',
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'set food budget 0');
+
+      expect(result).toBe(formatError());
+      expect(mockedUpsertBudget).not.toHaveBeenCalled();
+    });
+
+    it('sets budget without category (overall)', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'set_budget',
+          confidence: 0.95,
+          amount: 2000,
+          category_slug: null,
+          period: 'month',
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'set budget 2000');
+
+      expect(result).toContain('Overall');
+      expect(mockedUpsertBudget).toHaveBeenCalledWith(
+        'user-1',
+        null,
+        2000,
+        'PEN',
+        'monthly',
+        expect.any(String),
+      );
+    });
+  });
+
+  describe('query_budget intent', () => {
+    it('returns budget status with spending', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'query_budget',
+          confidence: 0.9,
+          category_slug: 'food_dining',
+        }),
+      );
+      mockedGetBudget.mockResolvedValue(makeBudget());
+      mockedGetExpensesTotal.mockResolvedValue(520);
+
+      const result = await handleMessage(PHONE, 'text', "how's my food budget?");
+
+      expect(result).toContain('Food & Dining');
+      expect(result).toContain('S/520.00');
+      expect(result).toContain('S/800.00');
+      expect(result).toContain('65%');
+    });
+
+    it('returns no-budget message when no budget is set', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'query_budget',
+          confidence: 0.9,
+          category_slug: 'food_dining',
+        }),
+      );
+      mockedGetBudget.mockResolvedValue(null);
+
+      const result = await handleMessage(PHONE, 'text', "how's my food budget?");
+
+      expect(result).toContain('No budget set');
+      expect(result).toContain('Food & Dining');
+    });
+
+    it('shows warning at high usage', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'query_budget',
+          confidence: 0.9,
+          category_slug: 'food_dining',
+        }),
+      );
+      mockedGetBudget.mockResolvedValue(makeBudget());
+      mockedGetExpensesTotal.mockResolvedValue(700);
+
+      const result = await handleMessage(PHONE, 'text', 'budget status food');
+
+      expect(result).toContain('⚠️');
+    });
+
+    it('shows over-budget alert', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'query_budget',
+          confidence: 0.9,
+          category_slug: 'food_dining',
+        }),
+      );
+      mockedGetBudget.mockResolvedValue(makeBudget());
+      mockedGetExpensesTotal.mockResolvedValue(900);
+
+      const result = await handleMessage(PHONE, 'text', 'food budget');
+
+      expect(result).toContain('🚨');
+      expect(result).toContain('Over budget');
+    });
+
+    it('queries without category (overall)', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'query_budget',
+          confidence: 0.9,
+          category_slug: null,
+        }),
+      );
+      mockedGetBudget.mockResolvedValue(null);
+
+      const result = await handleMessage(PHONE, 'text', 'budget status');
+
+      expect(result).toContain('No budget set');
+      expect(result).toContain('overall');
+    });
+
+    it('tries weekly budget when monthly not found', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'query_budget',
+          confidence: 0.9,
+          category_slug: 'food_dining',
+        }),
+      );
+      mockedGetBudget
+        .mockResolvedValueOnce(null) // monthly not found
+        .mockResolvedValueOnce(makeBudget({ period: 'weekly', amount: 200 })); // weekly found
+      mockedGetExpensesTotal.mockResolvedValue(100);
+
+      const result = await handleMessage(PHONE, 'text', 'food budget?');
+
+      expect(result).toContain('S/200.00');
+      expect(mockedGetBudget).toHaveBeenCalledTimes(2);
     });
   });
 });

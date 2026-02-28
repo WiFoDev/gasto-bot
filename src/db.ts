@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
-import type { User, Category, Expense } from './types.js';
+import type { User, Category, Expense, Budget } from './types.js';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -108,4 +108,95 @@ export async function softDeleteExpense(id: string): Promise<Expense> {
 
   if (error) throw error;
   return data;
+}
+
+// ── Budget queries ──────────────────────────────────────────────────
+
+export async function getBudget(
+  userId: string,
+  categoryId: string | null,
+  period: 'weekly' | 'monthly',
+): Promise<Budget | null> {
+  let query = supabase
+    .from('budgets')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('period', period);
+
+  query = categoryId === null
+    ? query.is('category_id', null)
+    : query.eq('category_id', categoryId);
+
+  const { data, error } = await query.maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getBudgets(userId: string): Promise<Budget[]> {
+  const { data, error } = await supabase
+    .from('budgets')
+    .select('*')
+    .eq('user_id', userId);
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function upsertBudget(
+  userId: string,
+  categoryId: string | null,
+  amount: number,
+  currency: string,
+  period: 'weekly' | 'monthly',
+  startDate: string,
+): Promise<Budget> {
+  const existing = await getBudget(userId, categoryId, period);
+
+  if (existing) {
+    const { data, error } = await supabase
+      .from('budgets')
+      .update({ amount, currency, start_date: startDate })
+      .eq('id', existing.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  const { data, error } = await supabase
+    .from('budgets')
+    .insert({
+      user_id: userId,
+      category_id: categoryId,
+      amount,
+      currency,
+      period,
+      start_date: startDate,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getExpensesTotal(
+  userId: string,
+  categoryId: string,
+  startDate: string,
+  endDate: string,
+): Promise<number> {
+  const { data, error } = await supabase
+    .from('expenses')
+    .select('amount')
+    .eq('user_id', userId)
+    .eq('category_id', categoryId)
+    .gte('date', startDate)
+    .lte('date', endDate)
+    .is('deleted_at', null);
+
+  if (error) throw error;
+  return (data ?? []).reduce((sum, e) => sum + Number(e.amount), 0);
 }

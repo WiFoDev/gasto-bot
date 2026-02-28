@@ -9,8 +9,11 @@ import {
   formatError,
   formatHelp,
   formatCurrency,
+  formatBudgetConfirmation,
+  formatBudgetStatus,
+  formatNoBudget,
 } from '../../src/formatter.js';
-import type { Expense, Category, PendingExpense } from '../../src/types.js';
+import type { Expense, Category, PendingExpense, Budget } from '../../src/types.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -369,5 +372,161 @@ describe('formatHelp', () => {
 
       Just type naturally, I'll figure it out!"
     `);
+  });
+});
+
+// ── Budget helpers ──────────────────────────────────────────────────
+
+function makeBudget(overrides: Partial<Budget> = {}): Budget {
+  return {
+    id: 'budget-1',
+    user_id: 'user-1',
+    category_id: 'cat-1',
+    amount: 800,
+    currency: 'PEN',
+    period: 'monthly',
+    start_date: '2026-02-01',
+    created_at: '2026-02-01T00:00:00Z',
+    ...overrides,
+  };
+}
+
+// ── formatBudgetConfirmation ────────────────────────────────────────
+
+describe('formatBudgetConfirmation', () => {
+  it('formats confirmation with category', () => {
+    const result = formatBudgetConfirmation(makeCategory(), 800, 'PEN', 'monthly');
+    expect(result).toContain('💰');
+    expect(result).toContain('Food & Dining');
+    expect(result).toContain('S/800.00');
+    expect(result).toContain('monthly');
+  });
+
+  it('formats confirmation without category (overall)', () => {
+    const result = formatBudgetConfirmation(null, 2000, 'PEN', 'monthly');
+    expect(result).toContain('Overall');
+    expect(result).toContain('S/2,000.00');
+  });
+
+  it('formats weekly budget', () => {
+    const result = formatBudgetConfirmation(makeCategory(), 200, 'PEN', 'weekly');
+    expect(result).toContain('weekly');
+  });
+
+  it('formats USD budget', () => {
+    const result = formatBudgetConfirmation(makeCategory(), 100, 'USD', 'monthly');
+    expect(result).toContain('$100.00');
+  });
+
+  it('snapshot: category monthly', () => {
+    expect(formatBudgetConfirmation(makeCategory(), 800, 'PEN', 'monthly'))
+      .toMatchInlineSnapshot(`"💰 🍽 Food & Dining budget set to S/800.00 monthly"`);
+  });
+
+  it('snapshot: overall monthly', () => {
+    expect(formatBudgetConfirmation(null, 2000, 'PEN', 'monthly'))
+      .toMatchInlineSnapshot(`"💰 Overall budget set to S/2,000.00 monthly"`);
+  });
+});
+
+// ── formatBudgetStatus ──────────────────────────────────────────────
+
+describe('formatBudgetStatus', () => {
+  it('formats status at 50% usage', () => {
+    const result = formatBudgetStatus(makeCategory(), makeBudget(), 400, 15);
+    expect(result).toContain('Food & Dining');
+    expect(result).toContain('S/400.00');
+    expect(result).toContain('S/800.00');
+    expect(result).toContain('50%');
+    expect(result).toContain('S/400.00');
+    expect(result).not.toContain('⚠️');
+    expect(result).not.toContain('🚨');
+  });
+
+  it('shows warning at 80% usage', () => {
+    const result = formatBudgetStatus(makeCategory(), makeBudget(), 640, 5);
+    expect(result).toContain('80%');
+    expect(result).toContain('⚠️');
+    expect(result).toContain('5 days left in month');
+  });
+
+  it('shows warning at 90% usage', () => {
+    const result = formatBudgetStatus(makeCategory(), makeBudget(), 720, 3);
+    expect(result).toContain('90%');
+    expect(result).toContain('⚠️');
+    expect(result).toContain('3 days');
+  });
+
+  it('shows over budget alert at 100%+', () => {
+    const result = formatBudgetStatus(makeCategory(), makeBudget(), 900, 2);
+    expect(result).toContain('🚨');
+    expect(result).toContain('Over budget');
+    expect(result).toContain('S/100.00');
+  });
+
+  it('uses singular "day" when 1 day remaining', () => {
+    const result = formatBudgetStatus(makeCategory(), makeBudget(), 680, 1);
+    expect(result).toContain('1 day left');
+    expect(result).not.toContain('1 days');
+  });
+
+  it('formats weekly period label', () => {
+    const result = formatBudgetStatus(
+      makeCategory(),
+      makeBudget({ period: 'weekly', amount: 200 }),
+      180,
+      2,
+    );
+    expect(result).toContain('week');
+  });
+
+  it('formats without category (overall)', () => {
+    const result = formatBudgetStatus(null, makeBudget(), 400, 15);
+    expect(result).toContain('📊 Overall');
+  });
+
+  it('snapshot: 50% usage', () => {
+    expect(formatBudgetStatus(makeCategory(), makeBudget(), 400, 15))
+      .toMatchInlineSnapshot(`
+      "🍽 Food & Dining
+      Spent: S/400.00 / S/800.00 (50%)
+      Remaining: S/400.00"
+    `);
+  });
+
+  it('snapshot: 85% usage with warning', () => {
+    expect(formatBudgetStatus(makeCategory(), makeBudget(), 680, 5))
+      .toMatchInlineSnapshot(`
+      "🍽 Food & Dining
+      Spent: S/680.00 / S/800.00 (85%)
+      Remaining: S/120.00
+      ⚠️ 5 days left in month"
+    `);
+  });
+
+  it('snapshot: over budget', () => {
+    expect(formatBudgetStatus(makeCategory(), makeBudget(), 950, 2))
+      .toMatchInlineSnapshot(`
+      "🍽 Food & Dining
+      Spent: S/950.00 / S/800.00 (119%)
+      Remaining: S/0.00
+      🚨 Over budget by S/150.00!"
+    `);
+  });
+});
+
+// ── formatNoBudget ──────────────────────────────────────────────────
+
+describe('formatNoBudget', () => {
+  it('formats with category', () => {
+    const result = formatNoBudget(makeCategory());
+    expect(result).toContain('Food & Dining');
+    expect(result).toContain('No budget set');
+  });
+
+  it('formats without category', () => {
+    const result = formatNoBudget(null);
+    expect(result).toContain('overall');
+    expect(result).toContain('No budget set');
   });
 });

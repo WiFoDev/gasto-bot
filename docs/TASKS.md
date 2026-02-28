@@ -143,13 +143,13 @@
   - Tests: extend `tests/unit/formatter.test.ts` — snapshot summary output, test with/without budget, test empty period.
   - Depends on: TASK-16
 
-- [ ] TASK-18: Budget CRUD
+- [x] TASK-18: Budget CRUD
   - Scope: extend `src/db.ts`, extend `src/handler.ts`
   - Details: Add to db.ts: `upsertBudget(userId, categoryId, amount, currency, period)` — upsert by (user, category, period). `getBudget(userId, categoryId, period)`. `getBudgets(userId)`. Add `set_budget` intent handling in handler.ts: extract category slug + amount + period from ParseResult → resolve category → upsert budget. Budget `start_date` = first of current month (if setting mid-month) or first of next month.
   - Tests: extend `tests/integration/db.test.ts` — upsert creates, upsert updates, query returns correct budget.
   - Depends on: TASK-15
 
-- [ ] TASK-19: Budget query & status formatting
+- [x] TASK-19: Budget query & status formatting
   - Scope: extend `src/db.ts`, extend `src/handler.ts`, extend `src/formatter.ts`
   - Details: `query_budget` intent: get budget → get expenses for that category in current period → compute spent, remaining, percentage. `formatBudgetStatus(budget, spent, daysRemaining)` → "🍽 Food & Dining\nSpent: S/520 / S/800 (65%)\nRemaining: S/280\n⚠️ 5 days left in month". Add warning emoji at ≥80%. Compute days remaining in period.
   - Tests: extend `tests/unit/formatter.test.ts` — test at 50%, 80%, 100%, over budget. Extend `tests/integration/handler.test.ts` — mock budget query flow.

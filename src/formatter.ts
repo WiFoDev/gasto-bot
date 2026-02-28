@@ -1,4 +1,4 @@
-import type { Expense, Category, PendingExpense } from './types.js';
+import type { Expense, Category, PendingExpense, Budget } from './types.js';
 
 const MAX_DESCRIPTION_LENGTH = 50;
 
@@ -105,4 +105,46 @@ export function formatHelp(): string {
 🧾 Receipt — send a photo
 
 Just type naturally, I'll figure it out!`;
+}
+
+export function formatBudgetConfirmation(
+  category: Category | null,
+  amount: number,
+  currency: string,
+  period: 'weekly' | 'monthly',
+): string {
+  const amountStr = formatCurrency(amount, currency);
+  const label = category ? `${category.icon} ${category.name}` : 'Overall';
+  return `💰 ${label} budget set to ${amountStr} ${period}`;
+}
+
+export function formatBudgetStatus(
+  category: Category | null,
+  budget: Budget,
+  spent: number,
+  daysRemaining: number,
+): string {
+  const label = category ? `${category.icon} ${category.name}` : '📊 Overall';
+  const budgetAmount = formatCurrency(budget.amount, budget.currency);
+  const spentAmount = formatCurrency(spent, budget.currency);
+  const remaining = budget.amount - spent;
+  const remainingAmount = formatCurrency(Math.max(remaining, 0), budget.currency);
+  const percentage = budget.amount > 0 ? Math.round((spent / budget.amount) * 100) : 0;
+  const periodLabel = budget.period === 'weekly' ? 'week' : 'month';
+
+  let msg = `${label}\nSpent: ${spentAmount} / ${budgetAmount} (${percentage}%)\nRemaining: ${remainingAmount}`;
+
+  if (remaining < 0) {
+    const overAmount = formatCurrency(Math.abs(remaining), budget.currency);
+    msg += `\n🚨 Over budget by ${overAmount}!`;
+  } else if (percentage >= 80) {
+    msg += `\n⚠️ ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} left in ${periodLabel}`;
+  }
+
+  return msg;
+}
+
+export function formatNoBudget(category: Category | null): string {
+  const label = category ? `${category.icon} ${category.name}` : 'overall';
+  return `No budget set for ${label}. Try "set ${category?.slug ?? ''} budget 500 monthly"`;
 }

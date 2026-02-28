@@ -7,6 +7,9 @@ import {
   getLastExpense,
   updateExpense,
   softDeleteExpense,
+  upsertBudget,
+  getBudget,
+  getExpensesTotal,
 } from './db.js';
 import { parseMessage } from './parse.js';
 import { getState, setState, clearState } from './state.js';
@@ -20,12 +23,77 @@ import {
   formatError,
   formatHelp,
   formatCurrency,
+  formatBudgetConfirmation,
+  formatBudgetStatus,
+  formatNoBudget,
 } from './formatter.js';
 import { CONFIDENCE_AUTO_LOG, CONFIDENCE_CONFIRM } from './config.js';
 import type { Category, Expense, ParseResult, PendingExpense, User } from './types.js';
 
 function getTodayDate(timezone: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date());
+}
+
+function getLocalDateParts(timezone: string): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  }).formatToParts(new Date());
+
+  return {
+    year: parseInt(parts.find((p) => p.type === 'year')!.value),
+    month: parseInt(parts.find((p) => p.type === 'month')!.value),
+    day: parseInt(parts.find((p) => p.type === 'day')!.value),
+  };
+}
+
+function getPeriodDates(
+  period: 'weekly' | 'monthly',
+  timezone: string,
+): { start: string; end: string } {
+  const { year, month, day } = getLocalDateParts(timezone);
+
+  if (period === 'monthly') {
+    const startStr = `${year}-${String(month).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const endStr = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    return { start: startStr, end: endStr };
+  }
+
+  // Weekly: Monday to Sunday
+  const todayDate = new Date(year, month - 1, day);
+  const dayOfWeek = todayDate.getDay(); // 0=Sun, 1=Mon, ...
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(year, month - 1, day + mondayOffset);
+  const sunday = new Date(monday.getTime() + 6 * 24 * 60 * 60 * 1000);
+
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  return { start: fmt(monday), end: fmt(sunday) };
+}
+
+function getDaysRemaining(period: 'weekly' | 'monthly', timezone: string): number {
+  const { year, month, day } = getLocalDateParts(timezone);
+
+  if (period === 'monthly') {
+    const lastDay = new Date(year, month, 0).getDate();
+    return lastDay - day;
+  }
+
+  // Weekly: days until Sunday
+  const todayDate = new Date(year, month - 1, day);
+  const dayOfWeek = todayDate.getDay(); // 0=Sun
+  return dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+}
+
+function resolveBudgetPeriod(
+  parsePeriod: 'today' | 'week' | 'month' | null,
+): 'weekly' | 'monthly' {
+  if (parsePeriod === 'week') return 'weekly';
+  return 'monthly';
 }
 
 async function resolveAndInsertExpense(
@@ -75,6 +143,74 @@ function buildConfirmationMessage(
 
   msg += '\nLog it?';
   return msg;
+}
+
+async function handleSetBudget(
+  user: User,
+  categories: Category[],
+  result: ParseResult,
+): Promise<string> {
+  if (!result.amount || result.amount <= 0) {
+    return formatError();
+  }
+
+  const period = resolveBudgetPeriod(result.period);
+  const currency = result.currency ?? user.currency;
+
+  let category: Category | null = null;
+  if (result.category_slug) {
+    category = await getCategoryBySlug(user.id, result.category_slug);
+    if (!category) {
+      category = categories.find((c) => c.slug === result.category_slug) ?? null;
+    }
+  }
+
+  const { start } = getPeriodDates(period, user.timezone);
+
+  await upsertBudget(
+    user.id,
+    category?.id ?? null,
+    result.amount,
+    currency,
+    period,
+    start,
+  );
+
+  return formatBudgetConfirmation(category, result.amount, currency, period);
+}
+
+async function handleQueryBudget(
+  user: User,
+  categories: Category[],
+  result: ParseResult,
+): Promise<string> {
+  let category: Category | null = null;
+  if (result.category_slug) {
+    category = await getCategoryBySlug(user.id, result.category_slug);
+    if (!category) {
+      category = categories.find((c) => c.slug === result.category_slug) ?? null;
+    }
+  }
+
+  // Try monthly first, then weekly
+  let budget = await getBudget(user.id, category?.id ?? null, 'monthly');
+  if (!budget) {
+    budget = await getBudget(user.id, category?.id ?? null, 'weekly');
+  }
+
+  if (!budget) {
+    return formatNoBudget(category);
+  }
+
+  const { start, end } = getPeriodDates(budget.period, user.timezone);
+
+  const spent = category
+    ? await getExpensesTotal(user.id, category.id, start, end)
+    : 0;
+
+  const days = getDaysRemaining(budget.period, user.timezone);
+
+  return formatBudgetStatus(category, budget, spent, days);
 }
 
 async function handleLogExpense(
@@ -299,6 +435,10 @@ export async function handleMessage(
       return handleCorrectExpense(phone, user, categories, result);
     case 'delete_expense':
       return handleDeleteExpense(phone, user, categories);
+    case 'set_budget':
+      return handleSetBudget(user, categories, result);
+    case 'query_budget':
+      return handleQueryBudget(user, categories, result);
     case 'help':
       return formatHelp();
     case 'unknown':
