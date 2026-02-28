@@ -26,6 +26,8 @@ import {
   formatDeletion,
   formatNoExpenseToModify,
   formatError,
+  formatParseError,
+  formatDatabaseError,
   formatHelp,
   formatCurrency,
   formatBudgetConfirmation,
@@ -447,7 +449,40 @@ async function handleImageMessage(
 const MAX_MESSAGE_LENGTH = 500;
 const CONFIRM_PATTERN = /^(yes|y|si|sí|ok|dale)$/i;
 
+function classifyError(error: unknown): string {
+  if (typeof error === 'object' && error !== null) {
+    const name = (error as { constructor?: { name?: string } }).constructor?.name ?? '';
+    // Anthropic SDK errors: APIError, APIConnectionError, APIConnectionTimeoutError, etc.
+    if (name.includes('API') || name.includes('Anthropic')) return 'ai';
+    // Supabase PostgrestError has 'code' and 'details'
+    if ('code' in error && 'details' in error) return 'database';
+  }
+  return 'unknown';
+}
+
 export async function handleMessage(
+  phone: string,
+  type: 'text' | 'image',
+  content: string,
+): Promise<string> {
+  try {
+    return await handleMessageInner(phone, type, content);
+  } catch (error) {
+    console.log(JSON.stringify({
+      event: 'handler_error',
+      error: error instanceof Error ? error.message : String(error),
+      phone,
+      timestamp: new Date().toISOString(),
+    }));
+
+    const kind = classifyError(error);
+    if (kind === 'ai') return formatParseError();
+    if (kind === 'database') return formatDatabaseError();
+    return formatError();
+  }
+}
+
+async function handleMessageInner(
   phone: string,
   type: 'text' | 'image',
   content: string,
@@ -470,7 +505,7 @@ export async function handleMessage(
   // 4. Check conversation state
   const state = getState(phone);
 
-  // 4. Handle awaiting_description — treat reply as category or description
+  // 5. Handle awaiting_description — treat reply as category or description
   if (state?.lastAction === 'awaiting_description' && state.pendingExpense) {
     // Check if the reply matches a category name/slug
     const replyLower = content.trim().toLowerCase();
@@ -490,7 +525,7 @@ export async function handleMessage(
     return formatExpenseConfirmation(expense, category);
   }
 
-  // 5. Handle awaiting_confirmation
+  // 6. Handle awaiting_confirmation
   if (state?.lastAction === 'awaiting_confirmation' && state.pendingExpense) {
     if (CONFIRM_PATTERN.test(content.trim())) {
       const { expense, category } = await resolveAndInsertExpense(
@@ -510,16 +545,16 @@ export async function handleMessage(
     clearState(phone);
   }
 
-  // 6. Truncate long messages before parsing
+  // 7. Truncate long messages before parsing
   const truncatedContent =
     content.length > MAX_MESSAGE_LENGTH
       ? content.slice(0, MAX_MESSAGE_LENGTH)
       : content;
 
-  // 7. Parse the message
+  // 8. Parse the message
   const result = await parseMessage(truncatedContent, categories);
 
-  // 8. Route by intent
+  // 9. Route by intent
   switch (result.intent) {
     case 'log_expense':
       return handleLogExpense(phone, user, categories, result, content);

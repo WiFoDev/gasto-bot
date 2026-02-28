@@ -233,7 +233,7 @@
   - Tests: extend handler tests — verify each edge case returns expected response (or no response)
   - Depends on: TASK-15
 
-- [ ] TASK-29: Error handling hardening
+- [x] TASK-29: Error handling hardening
   - Scope: all `src/` files
   - Details: Review every external call (Claude API, Supabase, Kapso) and ensure errors are caught and produce user-friendly responses. Claude timeout → "I'm thinking too hard, try again." Supabase error → "Couldn't save that, try again." Kapso send failure → log error (can't reply, so just log). Never expose stack traces, raw error messages, or internal state to the user. Add Fastify error handler for uncaught route errors.
   - Tests: extend handler tests — inject errors from mocked dependencies, verify user-friendly messages returned

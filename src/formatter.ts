@@ -65,6 +65,14 @@ export function formatError(): string {
   return 'Something went wrong, try again.';
 }
 
+export function formatParseError(): string {
+  return "I'm thinking too hard, try again.";
+}
+
+export function formatDatabaseError(): string {
+  return "Couldn't save that, try again.";
+}
+
 export function formatCorrection(
   expense: Expense,
   oldCategory: Category,

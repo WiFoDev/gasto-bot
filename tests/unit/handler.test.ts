@@ -59,7 +59,7 @@ import {
   getExpensesSummary,
 } from '../../src/db.js';
 import { getState, setState, clearState } from '../../src/state.js';
-import { formatHelp, formatError, formatNoExpenseToModify, formatReceiptUnclear, formatUnknownUser } from '../../src/formatter.js';
+import { formatHelp, formatError, formatParseError, formatDatabaseError, formatNoExpenseToModify, formatReceiptUnclear, formatUnknownUser } from '../../src/formatter.js';
 import type {
   User,
   Category,
@@ -1444,6 +1444,179 @@ describe('handleMessage', () => {
       const result = await handleMessage(PHONE, 'image', 'https://media.kapso.ai/img.jpg');
 
       expect(result).toBe(formatUnknownUser());
+    });
+  });
+
+  // ── Error handling hardening ──────────────────────────────────────
+
+  describe('error handling', () => {
+    it('returns database error when getUserByPhone throws', async () => {
+      const dbError = Object.assign(new Error('connection refused'), {
+        code: 'PGRST301',
+        details: 'connection refused',
+        hint: null,
+      });
+      mockedGetUserByPhone.mockRejectedValue(dbError);
+
+      const result = await handleMessage(PHONE, 'text', 'almuerzo 35');
+
+      expect(result).toBe(formatDatabaseError());
+    });
+
+    it('returns database error when getCategories throws', async () => {
+      const dbError = Object.assign(new Error('timeout'), {
+        code: '57014',
+        details: 'query timed out',
+        hint: null,
+      });
+      mockedGetCategories.mockRejectedValue(dbError);
+
+      const result = await handleMessage(PHONE, 'text', 'almuerzo 35');
+
+      expect(result).toBe(formatDatabaseError());
+    });
+
+    it('returns database error when insertExpense throws', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ confidence: 0.95, category_slug: 'food_dining' }),
+      );
+      const dbError = Object.assign(new Error('insert failed'), {
+        code: '23505',
+        details: 'duplicate key',
+        hint: null,
+      });
+      mockedInsertExpense.mockRejectedValue(dbError);
+
+      const result = await handleMessage(PHONE, 'text', 'almuerzo 35');
+
+      expect(result).toBe(formatDatabaseError());
+    });
+
+    it('returns database error when updateExpense throws during correction', async () => {
+      // Set up a previous expense
+      const existing = makeExpense({ id: 'exp-1', category_id: 'cat-food' });
+      mockedGetLastExpense.mockResolvedValue(existing);
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'correct_expense',
+          confidence: 0.9,
+          correction_field: 'category',
+          category_slug: 'transport',
+        }),
+      );
+      const dbError = Object.assign(new Error('update failed'), {
+        code: 'PGRST204',
+        details: 'row not found',
+        hint: null,
+      });
+      mockedUpdateExpense.mockRejectedValue(dbError);
+
+      const result = await handleMessage(PHONE, 'text', "wrong, it's transport");
+
+      expect(result).toBe(formatDatabaseError());
+    });
+
+    it('returns database error when softDeleteExpense throws', async () => {
+      const existing = makeExpense({ id: 'exp-1' });
+      mockedGetLastExpense.mockResolvedValue(existing);
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'delete_expense', confidence: 0.9 }),
+      );
+      const dbError = Object.assign(new Error('delete failed'), {
+        code: 'PGRST204',
+        details: 'row not found',
+        hint: null,
+      });
+      mockedSoftDeleteExpense.mockRejectedValue(dbError);
+
+      const result = await handleMessage(PHONE, 'text', 'delete that');
+
+      expect(result).toBe(formatDatabaseError());
+    });
+
+    it('returns database error when getExpensesSummary throws', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'query_summary', confidence: 0.9, period: 'week' }),
+      );
+      const dbError = Object.assign(new Error('query failed'), {
+        code: 'PGRST301',
+        details: 'connection lost',
+        hint: null,
+      });
+      mockedGetExpensesSummary.mockRejectedValue(dbError);
+
+      const result = await handleMessage(PHONE, 'text', 'how much this week?');
+
+      expect(result).toBe(formatDatabaseError());
+    });
+
+    it('returns database error when upsertBudget throws', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'set_budget',
+          confidence: 0.9,
+          amount: 800,
+          category_slug: 'food_dining',
+          period: 'month',
+        }),
+      );
+      const dbError = Object.assign(new Error('upsert failed'), {
+        code: '23503',
+        details: 'foreign key violation',
+        hint: null,
+      });
+      mockedUpsertBudget.mockRejectedValue(dbError);
+
+      const result = await handleMessage(PHONE, 'text', 'set food budget 800');
+
+      expect(result).toBe(formatDatabaseError());
+    });
+
+    it('returns AI error when an Anthropic-like error bubbles up', async () => {
+      // Simulate an Anthropic SDK error (class name contains "API")
+      class APIConnectionTimeoutError extends Error {
+        constructor() {
+          super('Request timed out');
+          this.name = 'APIConnectionTimeoutError';
+        }
+      }
+      mockedParseMessage.mockRejectedValue(new APIConnectionTimeoutError());
+
+      const result = await handleMessage(PHONE, 'text', 'almuerzo 35');
+
+      expect(result).toBe(formatParseError());
+    });
+
+    it('returns generic error for unknown error types', async () => {
+      mockedGetUserByPhone.mockRejectedValue(new Error('something unexpected'));
+
+      const result = await handleMessage(PHONE, 'text', 'almuerzo 35');
+
+      expect(result).toBe(formatError());
+    });
+
+    it('never exposes raw error messages to the user', async () => {
+      const sensitiveError = Object.assign(
+        new Error('FATAL: password authentication failed for user "postgres"'),
+        { code: '28P01', details: 'auth failed', hint: null },
+      );
+      mockedGetUserByPhone.mockRejectedValue(sensitiveError);
+
+      const result = await handleMessage(PHONE, 'text', 'almuerzo 35');
+
+      expect(result).not.toContain('FATAL');
+      expect(result).not.toContain('password');
+      expect(result).not.toContain('postgres');
+      expect(result).not.toContain('28P01');
+    });
+
+    it('does not throw — always returns a string', async () => {
+      mockedGetUserByPhone.mockRejectedValue(new Error('catastrophe'));
+
+      // Should NOT throw, should return a string
+      const result = await handleMessage(PHONE, 'text', 'almuerzo 35');
+      expect(typeof result).toBe('string');
+      expect(result.length).toBeGreaterThan(0);
     });
   });
 });

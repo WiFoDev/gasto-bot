@@ -5,6 +5,17 @@ import { PORT } from './config.js';
 
 const server = Fastify();
 
+server.setErrorHandler((error: Error, _request, reply) => {
+  const statusCode = 'statusCode' in error ? (error as { statusCode: number }).statusCode : 500;
+  console.log(JSON.stringify({
+    event: 'uncaught_route_error',
+    error: error.message,
+    statusCode,
+    timestamp: new Date().toISOString(),
+  }));
+  reply.status(500).send({ error: 'Internal server error' });
+});
+
 await server.register(webhookPlugin, { handleMessage });
 
 await server.listen({ port: PORT, host: '0.0.0.0' });

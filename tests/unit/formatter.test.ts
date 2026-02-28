@@ -7,6 +7,8 @@ import {
   formatDeletion,
   formatNoExpenseToModify,
   formatError,
+  formatParseError,
+  formatDatabaseError,
   formatHelp,
   formatCurrency,
   formatBudgetConfirmation,
@@ -319,6 +321,48 @@ describe('formatError', () => {
   it('snapshot', () => {
     expect(formatError()).toMatchInlineSnapshot(
       `"Something went wrong, try again."`,
+    );
+  });
+});
+
+// ── formatParseError ─────────────────────────────────────────────────
+
+describe('formatParseError', () => {
+  it('returns a user-friendly AI error message', () => {
+    const result = formatParseError();
+    expect(result).toBeTruthy();
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('does not contain technical details', () => {
+    const result = formatParseError();
+    expect(result).not.toMatch(/error|exception|stack|timeout|api/i);
+  });
+
+  it('snapshot', () => {
+    expect(formatParseError()).toMatchInlineSnapshot(
+      `"I'm thinking too hard, try again."`,
+    );
+  });
+});
+
+// ── formatDatabaseError ─────────────────────────────────────────────
+
+describe('formatDatabaseError', () => {
+  it('returns a user-friendly database error message', () => {
+    const result = formatDatabaseError();
+    expect(result).toBeTruthy();
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('does not contain technical details', () => {
+    const result = formatDatabaseError();
+    expect(result).not.toMatch(/error|exception|stack|database|sql|supabase/i);
+  });
+
+  it('snapshot', () => {
+    expect(formatDatabaseError()).toMatchInlineSnapshot(
+      `"Couldn't save that, try again."`,
     );
   });
 });
