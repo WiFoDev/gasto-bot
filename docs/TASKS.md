@@ -195,13 +195,13 @@
   - Pass criteria: **≥ 70% accuracy on total + merchant**. If below, skip TASK-24 through TASK-26. Receipt scanning becomes Phase 2.
   - Depends on: TASK-22
 
-- [ ] TASK-24: Image download & Supabase storage
+- [x] TASK-24: Image download & Supabase storage
   - Scope: create `src/storage.ts`
   - Details: `downloadAndStore(mediaUrl: string, expenseId: string): Promise<string>`. Download image from Kapso media URL (these expire quickly — must download **immediately** on webhook receipt). Upload to Supabase Storage bucket `receipts/`. Return permanent public URL. Handle: download failure (URL expired), upload failure, oversized images (compress before upload if >5MB).
   - Tests: integration test — upload a test image to Supabase Storage, verify URL works
   - Depends on: TASK-03, TASK-23 (gate must pass)
 
-- [ ] TASK-25: Vision parsing module
+- [x] TASK-25: Vision parsing module
   - Scope: create `src/parse-image.ts`
   - Details: `parseReceipt(imageBuffer: Buffer): Promise<ReceiptResult>`. Send image to Claude Vision with receipt parser prompt. Parse JSON response. Return structured result: `{ merchant, amount, currency, date, confidence }`. Handle: API errors, malformed JSON, low confidence (return result anyway — handler decides what to do).
   - Tests: mock Anthropic client, verify JSON parsing. Real API tested via TASK-23 fixtures.
