@@ -13,6 +13,8 @@ import {
   formatBudgetStatus,
   formatNoBudget,
   formatSummary,
+  formatReceiptConfirmation,
+  formatReceiptUnclear,
 } from '../../src/formatter.js';
 import type { Expense, Category, PendingExpense, Budget, SummaryResult } from '../../src/types.js';
 
@@ -659,5 +661,80 @@ describe('formatSummary', () => {
 
       🍽 Food & Dining  S/250.00"
     `);
+  });
+});
+
+// ── formatReceiptConfirmation ────────────────────────────────────────
+
+describe('formatReceiptConfirmation', () => {
+  it('shows receipt details with merchant', () => {
+    const result = formatReceiptConfirmation(
+      makePendingExpense({ amount: 127.5, merchant: 'Plaza Vea', source: 'image' }),
+      makeCategory({ name: 'Groceries', icon: '🛒', slug: 'groceries' }),
+    );
+    expect(result).toContain('🧾');
+    expect(result).toContain('Plaza Vea');
+    expect(result).toContain('S/127.50');
+    expect(result).toContain('Groceries');
+    expect(result).toContain('Look right?');
+  });
+
+  it('shows "Receipt" when merchant is null', () => {
+    const result = formatReceiptConfirmation(
+      makePendingExpense({ amount: 50, merchant: null, source: 'image' }),
+      makeCategory(),
+    );
+    expect(result).toContain('Receipt');
+    expect(result).toContain('S/50.00');
+  });
+
+  it('includes date', () => {
+    const result = formatReceiptConfirmation(
+      makePendingExpense({ amount: 35, merchant: 'Wong', date: '2026-02-25' }),
+      makeCategory(),
+    );
+    expect(result).toContain('Feb 25');
+  });
+
+  it('snapshot: receipt with merchant', () => {
+    expect(
+      formatReceiptConfirmation(
+        makePendingExpense({ amount: 127.5, merchant: 'Plaza Vea', source: 'image' }),
+        makeCategory({ name: 'Groceries', icon: '🛒' }),
+      ),
+    ).toMatchInlineSnapshot(`
+      "🧾 Plaza Vea — S/127.50
+      Category: 🛒 Groceries · Feb 25
+      Look right?"
+    `);
+  });
+
+  it('snapshot: receipt without merchant', () => {
+    expect(
+      formatReceiptConfirmation(
+        makePendingExpense({ amount: 45, merchant: null, source: 'image' }),
+        makeCategory(),
+      ),
+    ).toMatchInlineSnapshot(`
+      "🧾 Receipt — S/45.00
+      Category: 🍽 Food & Dining · Feb 25
+      Look right?"
+    `);
+  });
+});
+
+// ── formatReceiptUnclear ────────────────────────────────────────────
+
+describe('formatReceiptUnclear', () => {
+  it('returns a helpful message', () => {
+    const result = formatReceiptUnclear();
+    expect(result).toBeTruthy();
+    expect(result).toContain('?');
+  });
+
+  it('snapshot', () => {
+    expect(formatReceiptUnclear()).toMatchInlineSnapshot(
+      `"Couldn't read that clearly. What was the total and where was it from?"`,
+    );
   });
 });

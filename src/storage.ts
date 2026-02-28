@@ -13,11 +13,9 @@ function extensionFromContentType(contentType: string): string {
   return 'jpg';
 }
 
-export async function downloadAndStore(
+export async function downloadImage(
   mediaUrl: string,
-  expenseId: string,
-): Promise<string> {
-  // 1. Download image from Kapso media URL (these expire quickly)
+): Promise<{ buffer: Buffer; contentType: string }> {
   const response = await fetch(mediaUrl);
   if (!response.ok) {
     throw new Error(
@@ -27,19 +25,24 @@ export async function downloadAndStore(
 
   const buffer = Buffer.from(await response.arrayBuffer());
 
-  // 2. Reject oversized images
   if (buffer.length > MAX_SIZE_BYTES) {
     throw new Error(
       `Image too large: ${(buffer.length / 1_048_576).toFixed(1)}MB (max 5MB)`,
     );
   }
 
-  // 3. Determine file extension from content type
   const contentType = response.headers.get('content-type') ?? 'image/jpeg';
-  const ext = extensionFromContentType(contentType);
-  const path = `${expenseId}.${ext}`;
+  return { buffer, contentType };
+}
 
-  // 4. Upload to Supabase Storage
+export async function uploadImage(
+  buffer: Buffer,
+  id: string,
+  contentType: string,
+): Promise<string> {
+  const ext = extensionFromContentType(contentType);
+  const path = `${id}.${ext}`;
+
   const { error } = await supabase.storage
     .from(BUCKET)
     .upload(path, buffer, { contentType, upsert: true });
@@ -48,8 +51,14 @@ export async function downloadAndStore(
     throw new Error(`Failed to upload to storage: ${error.message}`);
   }
 
-  // 5. Return permanent public URL
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-
   return data.publicUrl;
+}
+
+export async function downloadAndStore(
+  mediaUrl: string,
+  expenseId: string,
+): Promise<string> {
+  const { buffer, contentType } = await downloadImage(mediaUrl);
+  return uploadImage(buffer, expenseId, contentType);
 }

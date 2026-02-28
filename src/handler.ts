@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import {
   getUserByPhone,
   getCategories,
@@ -14,6 +15,8 @@ import {
   getExpensesSummary,
 } from './db.js';
 import { parseMessage } from './parse.js';
+import { parseReceipt } from './parse-image.js';
+import { downloadImage, uploadImage } from './storage.js';
 import { getState, setState, clearState } from './state.js';
 import {
   formatExpenseConfirmation,
@@ -29,6 +32,8 @@ import {
   formatBudgetStatus,
   formatNoBudget,
   formatSummary,
+  formatReceiptConfirmation,
+  formatReceiptUnclear,
 } from './formatter.js';
 import { CONFIDENCE_AUTO_LOG, CONFIDENCE_CONFIRM } from './config.js';
 import type { Category, Expense, ParseResult, PendingExpense, User } from './types.js';
@@ -364,6 +369,80 @@ async function handleDeleteExpense(
   return formatDeletion(deleted, category);
 }
 
+const RECEIPT_CONFIDENCE_THRESHOLD = 0.7;
+
+async function handleImageMessage(
+  phone: string,
+  user: User,
+  categories: Category[],
+  mediaUrl: string,
+): Promise<string> {
+  // 1. Download image immediately (Kapso URLs expire quickly)
+  let buffer: Buffer;
+  let contentType: string;
+  try {
+    ({ buffer, contentType } = await downloadImage(mediaUrl));
+  } catch {
+    return formatError();
+  }
+
+  // 2. Parse receipt with vision
+  const receipt = await parseReceipt(buffer);
+
+  // 3. Upload to Supabase Storage
+  const storageId = crypto.randomUUID();
+  let imageUrl: string | null = null;
+  try {
+    imageUrl = await uploadImage(buffer, storageId, contentType);
+  } catch {
+    // Storage failure shouldn't block the flow
+  }
+
+  const today = getTodayDate(user.timezone);
+
+  const pending: PendingExpense = {
+    amount: receipt.amount ?? 0,
+    currency: receipt.currency ?? user.currency,
+    category_slug: null,
+    description: null,
+    merchant: receipt.merchant,
+    date: receipt.date ?? today,
+    source: 'image',
+    raw_input: mediaUrl,
+    image_url: imageUrl,
+    ai_confidence: receipt.confidence,
+  };
+
+  // 4. High confidence with valid amount — ask for confirmation
+  if (
+    receipt.confidence >= RECEIPT_CONFIDENCE_THRESHOLD &&
+    receipt.amount != null &&
+    receipt.amount > 0
+  ) {
+    const category =
+      categories.find((c) => c.slug === 'other') ?? categories[0];
+
+    setState(phone, {
+      lastAction: 'awaiting_confirmation',
+      pendingExpense: pending,
+      lastExpenseId: null,
+      updatedAt: Date.now(),
+    });
+
+    return formatReceiptConfirmation(pending, category);
+  }
+
+  // 5. Low confidence — ask user for details
+  setState(phone, {
+    lastAction: 'awaiting_description',
+    pendingExpense: pending,
+    lastExpenseId: null,
+    updatedAt: Date.now(),
+  });
+
+  return formatReceiptUnclear();
+}
+
 const CONFIRM_PATTERN = /^(yes|y|si|sí|ok|dale)$/i;
 
 export async function handleMessage(
@@ -378,14 +457,16 @@ export async function handleMessage(
     return formatError();
   }
 
-  // 2. Image handling not yet implemented
-  if (type !== 'text') {
-    return formatError();
+  // 2. Load categories (needed for both image and text flows)
+  const categories = await getCategories(user.id);
+
+  // 3. Handle image messages
+  if (type === 'image') {
+    return handleImageMessage(phone, user, categories, content);
   }
 
-  // 3. Check conversation state
+  // 4. Check conversation state
   const state = getState(phone);
-  const categories = await getCategories(user.id);
 
   // 4. Handle awaiting_description — treat reply as category or description
   if (state?.lastAction === 'awaiting_description' && state.pendingExpense) {

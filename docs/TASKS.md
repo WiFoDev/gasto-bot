@@ -207,7 +207,7 @@
   - Tests: mock Anthropic client, verify JSON parsing. Real API tested via TASK-23 fixtures.
   - Depends on: TASK-22, TASK-24
 
-- [ ] TASK-26: Receipt confirmation flow
+- [x] TASK-26: Receipt confirmation flow
   - Scope: extend `src/handler.ts`, extend `src/webhook.ts`, extend `src/state.ts`
   - Details: When webhook receives image message: (1) immediately download image via `storage.ts`, (2) call `parseReceipt()`, (3) if confidence ≥ 0.7: show "🧾 Plaza Vea — S/127.50\nCategory: Groceries · Feb 25\nLook right?". Set state to `awaiting_confirmation` with pending expense data. (4) if confidence < 0.7: "Couldn't read that clearly. What was the total and where was it from?". Set state to `awaiting_description`. (5) on "yes"/"si" confirmation: insert expense with `source: 'image'` and `image_url`. On correction: update fields and insert.
   - Tests: extend handler tests — mock image parse returning high/low confidence, verify correct state transitions and confirmation flow.

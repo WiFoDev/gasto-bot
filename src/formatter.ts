@@ -185,6 +185,21 @@ export function formatSummary(
   return msg;
 }
 
+export function formatReceiptConfirmation(
+  pending: PendingExpense,
+  category: Category,
+): string {
+  const amount = formatCurrency(pending.amount, pending.currency);
+  let msg = `🧾 ${pending.merchant ?? 'Receipt'} — ${amount}`;
+  msg += `\nCategory: ${category.icon} ${category.name} · ${formatDate(pending.date)}`;
+  msg += '\nLook right?';
+  return msg;
+}
+
+export function formatReceiptUnclear(): string {
+  return "Couldn't read that clearly. What was the total and where was it from?";
+}
+
 export function formatNoBudget(category: Category | null): string {
   const label = category ? `${category.icon} ${category.name}` : 'overall';
   return `No budget set for ${label}. Try "set ${category?.slug ?? ''} budget 500 monthly"`;

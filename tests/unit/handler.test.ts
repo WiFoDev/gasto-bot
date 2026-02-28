@@ -14,6 +14,15 @@ vi.mock('../../src/parse.js', () => ({
   parseMessage: vi.fn(),
 }));
 
+vi.mock('../../src/parse-image.js', () => ({
+  parseReceipt: vi.fn(),
+}));
+
+vi.mock('../../src/storage.js', () => ({
+  downloadImage: vi.fn(),
+  uploadImage: vi.fn(),
+}));
+
 vi.mock('../../src/db.js', () => ({
   getUserByPhone: vi.fn(),
   getCategories: vi.fn(),
@@ -32,6 +41,8 @@ vi.mock('../../src/db.js', () => ({
 
 import { handleMessage } from '../../src/handler.js';
 import { parseMessage } from '../../src/parse.js';
+import { parseReceipt } from '../../src/parse-image.js';
+import { downloadImage, uploadImage } from '../../src/storage.js';
 import {
   getUserByPhone,
   getCategories,
@@ -48,7 +59,7 @@ import {
   getExpensesSummary,
 } from '../../src/db.js';
 import { getState, setState, clearState } from '../../src/state.js';
-import { formatHelp, formatError, formatNoExpenseToModify } from '../../src/formatter.js';
+import { formatHelp, formatError, formatNoExpenseToModify, formatReceiptUnclear } from '../../src/formatter.js';
 import type {
   User,
   Category,
@@ -56,6 +67,7 @@ import type {
   Budget,
   ParseResult,
   PendingExpense,
+  ReceiptResult,
 } from '../../src/types.js';
 
 // ── Test Helpers ────────────────────────────────────────────────────
@@ -169,6 +181,9 @@ const mockedParseMessage = parseMessage as ReturnType<typeof vi.fn>;
 const mockedUpsertBudget = upsertBudget as ReturnType<typeof vi.fn>;
 const mockedGetBudget = getBudget as ReturnType<typeof vi.fn>;
 const mockedGetExpensesTotal = getExpensesTotal as ReturnType<typeof vi.fn>;
+const mockedParseReceipt = parseReceipt as ReturnType<typeof vi.fn>;
+const mockedDownloadImage = downloadImage as ReturnType<typeof vi.fn>;
+const mockedUploadImage = uploadImage as ReturnType<typeof vi.fn>;
 
 function makeBudget(overrides: Partial<Budget> = {}): Budget {
   return {
@@ -214,6 +229,18 @@ beforeEach(() => {
   mockedUpsertBudget.mockResolvedValue(makeBudget());
   mockedGetBudget.mockResolvedValue(null);
   mockedGetExpensesTotal.mockResolvedValue(0);
+  mockedDownloadImage.mockResolvedValue({
+    buffer: Buffer.from('fake-image'),
+    contentType: 'image/jpeg',
+  });
+  mockedUploadImage.mockResolvedValue('https://storage.example.com/receipts/test.jpg');
+  mockedParseReceipt.mockResolvedValue({
+    merchant: 'Plaza Vea',
+    amount: 127.5,
+    currency: 'PEN',
+    date: '2026-02-27',
+    confidence: 0.85,
+  } satisfies ReceiptResult);
   mockedGetDateRange.mockReturnValue({ start: '2026-02-24', end: '2026-02-27' });
   mockedGetExpensesSummary.mockResolvedValue({
     total: 342.5,
@@ -241,12 +268,253 @@ describe('handleMessage', () => {
     });
   });
 
-  describe('unsupported message type', () => {
-    it('returns error for image messages', async () => {
-      const result = await handleMessage(PHONE, 'image', 'https://example.com/photo.jpg');
+  describe('image message — receipt flow', () => {
+    const IMAGE_URL = 'https://media.kapso.ai/image123.jpg';
 
-      expect(result).toBeTruthy();
+    it('downloads image, parses receipt, and asks for confirmation when confidence >= 0.7', async () => {
+      mockedParseReceipt.mockResolvedValue({
+        merchant: 'Plaza Vea',
+        amount: 127.5,
+        currency: 'PEN',
+        date: '2026-02-27',
+        confidence: 0.85,
+      });
+
+      const result = await handleMessage(PHONE, 'image', IMAGE_URL);
+
+      expect(mockedDownloadImage).toHaveBeenCalledWith(IMAGE_URL);
+      expect(mockedParseReceipt).toHaveBeenCalled();
+      expect(mockedUploadImage).toHaveBeenCalled();
+      expect(result).toContain('🧾');
+      expect(result).toContain('Plaza Vea');
+      expect(result).toContain('S/127.50');
+      expect(result).toContain('Look right?');
+      expect(mockedInsertExpense).not.toHaveBeenCalled();
+    });
+
+    it('sets state to awaiting_confirmation for high-confidence receipt', async () => {
+      mockedParseReceipt.mockResolvedValue({
+        merchant: 'Wong',
+        amount: 85,
+        currency: 'PEN',
+        date: '2026-02-27',
+        confidence: 0.8,
+      });
+
+      await handleMessage(PHONE, 'image', IMAGE_URL);
+
+      const state = getState(PHONE);
+      expect(state).not.toBeNull();
+      expect(state!.lastAction).toBe('awaiting_confirmation');
+      expect(state!.pendingExpense).not.toBeNull();
+      expect(state!.pendingExpense!.amount).toBe(85);
+      expect(state!.pendingExpense!.source).toBe('image');
+      expect(state!.pendingExpense!.merchant).toBe('Wong');
+      expect(state!.pendingExpense!.image_url).toBe('https://storage.example.com/receipts/test.jpg');
+    });
+
+    it('asks for details when receipt confidence < 0.7', async () => {
+      mockedParseReceipt.mockResolvedValue({
+        merchant: null,
+        amount: null,
+        currency: null,
+        date: null,
+        confidence: 0.3,
+      });
+
+      const result = await handleMessage(PHONE, 'image', IMAGE_URL);
+
+      expect(result).toBe(formatReceiptUnclear());
+    });
+
+    it('sets state to awaiting_description for low-confidence receipt', async () => {
+      mockedParseReceipt.mockResolvedValue({
+        merchant: null,
+        amount: 50,
+        currency: 'PEN',
+        date: null,
+        confidence: 0.5,
+      });
+
+      await handleMessage(PHONE, 'image', IMAGE_URL);
+
+      const state = getState(PHONE);
+      expect(state).not.toBeNull();
+      expect(state!.lastAction).toBe('awaiting_description');
+      expect(state!.pendingExpense).not.toBeNull();
+      expect(state!.pendingExpense!.source).toBe('image');
+    });
+
+    it('asks for details when amount is null even with high confidence', async () => {
+      mockedParseReceipt.mockResolvedValue({
+        merchant: 'Plaza Vea',
+        amount: null,
+        currency: 'PEN',
+        date: '2026-02-27',
+        confidence: 0.9,
+      });
+
+      const result = await handleMessage(PHONE, 'image', IMAGE_URL);
+
+      expect(result).toBe(formatReceiptUnclear());
+    });
+
+    it('asks for details when amount is zero with high confidence', async () => {
+      mockedParseReceipt.mockResolvedValue({
+        merchant: 'Plaza Vea',
+        amount: 0,
+        currency: 'PEN',
+        date: '2026-02-27',
+        confidence: 0.9,
+      });
+
+      const result = await handleMessage(PHONE, 'image', IMAGE_URL);
+
+      expect(result).toBe(formatReceiptUnclear());
+    });
+
+    it('returns error when image download fails', async () => {
+      mockedDownloadImage.mockRejectedValue(new Error('Download failed'));
+
+      const result = await handleMessage(PHONE, 'image', IMAGE_URL);
+
+      expect(result).toBe(formatError());
+      expect(mockedParseReceipt).not.toHaveBeenCalled();
+    });
+
+    it('continues without image_url when upload fails', async () => {
+      mockedUploadImage.mockRejectedValue(new Error('Upload failed'));
+      mockedParseReceipt.mockResolvedValue({
+        merchant: 'Wong',
+        amount: 100,
+        currency: 'PEN',
+        date: '2026-02-27',
+        confidence: 0.8,
+      });
+
+      const result = await handleMessage(PHONE, 'image', IMAGE_URL);
+
+      expect(result).toContain('🧾');
+      expect(result).toContain('Wong');
+      const state = getState(PHONE);
+      expect(state!.pendingExpense!.image_url).toBeNull();
+    });
+
+    it('does not call parseMessage for image messages', async () => {
+      await handleMessage(PHONE, 'image', IMAGE_URL);
+
       expect(mockedParseMessage).not.toHaveBeenCalled();
+    });
+
+    it('confirms receipt and inserts expense with source image', async () => {
+      // Step 1: Send image — gets receipt confirmation
+      mockedParseReceipt.mockResolvedValue({
+        merchant: 'Plaza Vea',
+        amount: 127.5,
+        currency: 'PEN',
+        date: '2026-02-27',
+        confidence: 0.85,
+      });
+
+      await handleMessage(PHONE, 'image', IMAGE_URL);
+
+      // Step 2: Confirm with "yes"
+      const result = await handleMessage(PHONE, 'text', 'yes');
+
+      expect(result).toContain('✅');
+      expect(result).toContain('S/127.50');
+      expect(mockedInsertExpense).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: 'image',
+          image_url: 'https://storage.example.com/receipts/test.jpg',
+          amount: 127.5,
+        }),
+      );
+    });
+
+    it('sets expense_logged state after receipt confirmation', async () => {
+      mockedParseReceipt.mockResolvedValue({
+        merchant: 'Wong',
+        amount: 85,
+        currency: 'PEN',
+        date: '2026-02-27',
+        confidence: 0.8,
+      });
+
+      await handleMessage(PHONE, 'image', IMAGE_URL);
+      await handleMessage(PHONE, 'text', 'si');
+
+      const state = getState(PHONE);
+      expect(state!.lastAction).toBe('expense_logged');
+      expect(state!.lastExpenseId).toBe('exp-new');
+    });
+
+    it('handles low-confidence receipt followed by user description', async () => {
+      mockedParseReceipt.mockResolvedValue({
+        merchant: null,
+        amount: 50,
+        currency: 'PEN',
+        date: '2026-02-27',
+        confidence: 0.4,
+      });
+
+      await handleMessage(PHONE, 'image', IMAGE_URL);
+
+      // User provides description
+      const result = await handleMessage(PHONE, 'text', 'groceries');
+
+      expect(result).toContain('✅');
+      expect(result).toContain('S/50.00');
+      expect(mockedInsertExpense).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: 'image',
+          description: 'groceries',
+        }),
+      );
+    });
+
+    it('uses "other" category by default for receipts', async () => {
+      mockedParseReceipt.mockResolvedValue({
+        merchant: 'Random Store',
+        amount: 50,
+        currency: 'PEN',
+        date: '2026-02-27',
+        confidence: 0.8,
+      });
+
+      const result = await handleMessage(PHONE, 'image', IMAGE_URL);
+
+      expect(result).toContain('Other');
+    });
+
+    it('uses user currency when receipt currency is null', async () => {
+      mockedParseReceipt.mockResolvedValue({
+        merchant: 'Store',
+        amount: 100,
+        currency: null,
+        date: '2026-02-27',
+        confidence: 0.8,
+      });
+
+      await handleMessage(PHONE, 'image', IMAGE_URL);
+
+      const state = getState(PHONE);
+      expect(state!.pendingExpense!.currency).toBe('PEN');
+    });
+
+    it('asks confirmation at exactly 0.7 confidence', async () => {
+      mockedParseReceipt.mockResolvedValue({
+        merchant: 'Wong',
+        amount: 75,
+        currency: 'PEN',
+        date: '2026-02-27',
+        confidence: 0.7,
+      });
+
+      const result = await handleMessage(PHONE, 'image', IMAGE_URL);
+
+      expect(result).toContain('🧾');
+      expect(result).toContain('Look right?');
     });
   });
 
