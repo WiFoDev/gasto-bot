@@ -34,6 +34,7 @@ import {
   formatSummary,
   formatReceiptConfirmation,
   formatReceiptUnclear,
+  formatUnknownUser,
 } from './formatter.js';
 import { CONFIDENCE_AUTO_LOG, CONFIDENCE_CONFIRM } from './config.js';
 import type { Category, Expense, ParseResult, PendingExpense, User } from './types.js';
@@ -443,6 +444,7 @@ async function handleImageMessage(
   return formatReceiptUnclear();
 }
 
+const MAX_MESSAGE_LENGTH = 500;
 const CONFIRM_PATTERN = /^(yes|y|si|sí|ok|dale)$/i;
 
 export async function handleMessage(
@@ -454,7 +456,7 @@ export async function handleMessage(
   const normalizedPhone = phone.startsWith('+') ? phone : `+${phone}`;
   const user = await getUserByPhone(normalizedPhone);
   if (!user) {
-    return formatError();
+    return formatUnknownUser();
   }
 
   // 2. Load categories (needed for both image and text flows)
@@ -508,10 +510,16 @@ export async function handleMessage(
     clearState(phone);
   }
 
-  // 6. Parse the message
-  const result = await parseMessage(content, categories);
+  // 6. Truncate long messages before parsing
+  const truncatedContent =
+    content.length > MAX_MESSAGE_LENGTH
+      ? content.slice(0, MAX_MESSAGE_LENGTH)
+      : content;
 
-  // 7. Route by intent
+  // 7. Parse the message
+  const result = await parseMessage(truncatedContent, categories);
+
+  // 8. Route by intent
   switch (result.intent) {
     case 'log_expense':
       return handleLogExpense(phone, user, categories, result, content);

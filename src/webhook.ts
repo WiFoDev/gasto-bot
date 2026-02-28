@@ -2,7 +2,27 @@ import crypto from 'node:crypto';
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { WhatsAppClient } from '@kapso/whatsapp-cloud-api';
 import { KAPSO_API_KEY, KAPSO_WEBHOOK_SECRET } from './config.js';
+import { formatUnsupportedMedia } from './formatter.js';
 import type { KapsoWebhookPayload, MessageHandler } from './types.js';
+
+// ── Deduplication ───────────────────────────────────────────────
+
+const DEDUP_MAX_SIZE = 1000;
+const recentMessageIds = new Set<string>();
+
+function isDuplicate(messageId: string): boolean {
+  if (recentMessageIds.has(messageId)) return true;
+  recentMessageIds.add(messageId);
+  // Evict oldest entries when set grows too large
+  if (recentMessageIds.size > DEDUP_MAX_SIZE) {
+    const first = recentMessageIds.values().next().value!;
+    recentMessageIds.delete(first);
+  }
+  return false;
+}
+
+// Exported for testing
+export { recentMessageIds };
 
 // ── Plugin options ───────────────────────────────────────────────
 
@@ -97,6 +117,20 @@ const webhookPlugin: FastifyPluginAsync<WebhookPluginOptions> = async (
       return reply.status(200).send({ status: 'skipped' });
     }
 
+    // Skip duplicate messages
+    if (message.id && isDuplicate(message.id)) {
+      console.log(
+        JSON.stringify({
+          event: 'webhook_skipped',
+          reason: 'duplicate',
+          messageId: message.id,
+          phone,
+          timestamp: new Date().toISOString(),
+        }),
+      );
+      return reply.status(200).send({ status: 'duplicate' });
+    }
+
     // Determine message type and content
     let messageType: 'text' | 'image';
     let content: string;
@@ -113,7 +147,7 @@ const webhookPlugin: FastifyPluginAsync<WebhookPluginOptions> = async (
         message.image?.id ??
         '';
     } else {
-      // Unsupported message type — acknowledge but don't process
+      // Unsupported message type — reply with a helpful message
       console.log(
         JSON.stringify({
           event: 'webhook_skipped',
@@ -123,6 +157,15 @@ const webhookPlugin: FastifyPluginAsync<WebhookPluginOptions> = async (
           timestamp: new Date().toISOString(),
         }),
       );
+      try {
+        await kapsoClient.messages.sendText({
+          phoneNumberId: phone_number_id,
+          to: phone,
+          body: formatUnsupportedMedia(),
+        });
+      } catch {
+        // Best-effort reply
+      }
       return reply.status(200).send({ status: 'unsupported_type' });
     }
 

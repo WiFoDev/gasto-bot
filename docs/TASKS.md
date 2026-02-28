@@ -227,7 +227,7 @@
   - Tests: extend formatter tests — verify help output
   - Depends on: TASK-15
 
-- [ ] TASK-28: Edge case handling
+- [x] TASK-28: Edge case handling
   - Scope: extend `src/webhook.ts`, extend `src/handler.ts`
   - Details: (1) Duplicate webhooks: track last N message IDs in memory Set, skip duplicates. (2) Unknown phone numbers: ignore or reply "This is a personal bot." (3) Unsupported media (voice notes, video, documents): reply "I can only process text and photos right now." (4) Empty or whitespace-only messages: ignore. (5) Very long messages (>500 chars): truncate before sending to Claude.
   - Tests: extend handler tests — verify each edge case returns expected response (or no response)

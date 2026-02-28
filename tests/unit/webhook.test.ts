@@ -82,8 +82,11 @@ function inject(
 // ── Tests ────────────────────────────────────────────────────────
 
 describe('webhook plugin', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    // Clear dedup set between tests
+    const { recentMessageIds } = await import('../../src/webhook.js');
+    recentMessageIds.clear();
   });
 
   // ── Health check ─────────────────────────────────────────────
@@ -296,5 +299,74 @@ describe('webhook plugin', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ status: 'ok' });
+  });
+
+  // ── Duplicate message handling ──────────────────────────────────
+
+  it('skips duplicate messages with same ID', async () => {
+    const handler = vi.fn().mockResolvedValue('OK');
+    const { app } = await buildApp(handler);
+    const payload = makePayload();
+
+    // First request — should process
+    const res1 = await inject(app, payload, sign(payload));
+    expect(res1.statusCode).toBe(200);
+    expect(res1.json()).toEqual({ status: 'ok' });
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    // Second request with same message ID — should be skipped
+    const res2 = await inject(app, payload, sign(payload));
+    expect(res2.statusCode).toBe(200);
+    expect(res2.json()).toEqual({ status: 'duplicate' });
+    expect(handler).toHaveBeenCalledTimes(1); // not called again
+  });
+
+  it('processes messages with different IDs', async () => {
+    const handler = vi.fn().mockResolvedValue('OK');
+    const { app } = await buildApp(handler);
+
+    const payload1 = makePayload();
+    const payload2 = makePayload({
+      message: {
+        id: 'wamid.different',
+        type: 'text',
+        timestamp: '1730092800',
+        from: '+51999888777',
+        text: { body: 'uber 23' },
+        kapso: { direction: 'inbound' },
+      },
+    });
+
+    const res1 = await inject(app, payload1, sign(payload1));
+    const res2 = await inject(app, payload2, sign(payload2));
+
+    expect(res1.json()).toEqual({ status: 'ok' });
+    expect(res2.json()).toEqual({ status: 'ok' });
+    expect(handler).toHaveBeenCalledTimes(2);
+  });
+
+  // ── Unsupported media reply ─────────────────────────────────────
+
+  it('sends reply for unsupported message types', async () => {
+    const handler = vi.fn();
+    const { app } = await buildApp(handler);
+    const payload = makePayload({
+      message: {
+        id: 'wamid.audio1',
+        type: 'audio',
+        timestamp: '1730092800',
+        kapso: { direction: 'inbound' },
+      },
+    });
+    const res = await inject(app, payload, sign(payload));
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ status: 'unsupported_type' });
+    expect(handler).not.toHaveBeenCalled();
+    expect(mockSendText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: 'I can only process text and photos right now.',
+      }),
+    );
   });
 });

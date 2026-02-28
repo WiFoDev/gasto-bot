@@ -15,6 +15,8 @@ import {
   formatSummary,
   formatReceiptConfirmation,
   formatReceiptUnclear,
+  formatUnknownUser,
+  formatUnsupportedMedia,
 } from '../../src/formatter.js';
 import type { Expense, Category, PendingExpense, Budget, SummaryResult } from '../../src/types.js';
 
@@ -735,6 +737,24 @@ describe('formatReceiptUnclear', () => {
   it('snapshot', () => {
     expect(formatReceiptUnclear()).toMatchInlineSnapshot(
       `"Couldn't read that clearly. What was the total and where was it from?"`,
+    );
+  });
+});
+
+// ── formatUnknownUser ────────────────────────────────────────────────
+
+describe('formatUnknownUser', () => {
+  it('returns personal bot message', () => {
+    expect(formatUnknownUser()).toBe('This is a personal bot.');
+  });
+});
+
+// ── formatUnsupportedMedia ──────────────────────────────────────────
+
+describe('formatUnsupportedMedia', () => {
+  it('returns unsupported media message', () => {
+    expect(formatUnsupportedMedia()).toBe(
+      'I can only process text and photos right now.',
     );
   });
 });

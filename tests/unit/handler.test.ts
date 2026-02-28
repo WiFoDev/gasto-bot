@@ -59,7 +59,7 @@ import {
   getExpensesSummary,
 } from '../../src/db.js';
 import { getState, setState, clearState } from '../../src/state.js';
-import { formatHelp, formatError, formatNoExpenseToModify, formatReceiptUnclear } from '../../src/formatter.js';
+import { formatHelp, formatError, formatNoExpenseToModify, formatReceiptUnclear, formatUnknownUser } from '../../src/formatter.js';
 import type {
   User,
   Category,
@@ -258,12 +258,13 @@ beforeEach(() => {
 
 describe('handleMessage', () => {
   describe('user lookup', () => {
-    it('returns error for unknown phone number', async () => {
+    it('returns personal bot message for unknown phone number', async () => {
       mockedGetUserByPhone.mockResolvedValue(null);
 
       const result = await handleMessage(PHONE, 'text', 'hello');
 
-      expect(result).toBe(formatError());
+      expect(result).toBe(formatUnknownUser());
+      expect(result).toBe('This is a personal bot.');
       expect(mockedParseMessage).not.toHaveBeenCalled();
     });
   });
@@ -1402,6 +1403,47 @@ describe('handleMessage', () => {
 
       expect(result).toContain('S/200.00');
       expect(mockedGetBudget).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ── Edge cases (TASK-28) ─────────────────────────────────────────
+
+  describe('edge cases', () => {
+    it('truncates messages longer than 500 characters before parsing', async () => {
+      const longMessage = 'a'.repeat(600);
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'unknown', confidence: 0.1 }),
+      );
+
+      await handleMessage(PHONE, 'text', longMessage);
+
+      // parseMessage should receive truncated content (500 chars)
+      expect(mockedParseMessage).toHaveBeenCalledWith(
+        'a'.repeat(500),
+        mockCategories,
+      );
+    });
+
+    it('passes messages <= 500 characters without truncation', async () => {
+      const normalMessage = 'almuerzo 35 soles';
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'unknown', confidence: 0.1 }),
+      );
+
+      await handleMessage(PHONE, 'text', normalMessage);
+
+      expect(mockedParseMessage).toHaveBeenCalledWith(
+        normalMessage,
+        mockCategories,
+      );
+    });
+
+    it('returns personal bot message for unknown user on image message', async () => {
+      mockedGetUserByPhone.mockResolvedValue(null);
+
+      const result = await handleMessage(PHONE, 'image', 'https://media.kapso.ai/img.jpg');
+
+      expect(result).toBe(formatUnknownUser());
     });
   });
 });

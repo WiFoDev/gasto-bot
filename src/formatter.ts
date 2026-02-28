@@ -204,3 +204,11 @@ export function formatNoBudget(category: Category | null): string {
   const label = category ? `${category.icon} ${category.name}` : 'overall';
   return `No budget set for ${label}. Try "set ${category?.slug ?? ''} budget 500 monthly"`;
 }
+
+export function formatUnknownUser(): string {
+  return 'This is a personal bot.';
+}
+
+export function formatUnsupportedMedia(): string {
+  return 'I can only process text and photos right now.';
+}
