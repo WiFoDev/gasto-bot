@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { Readable } from 'node:stream';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Fastify from 'fastify';
 
@@ -58,6 +59,18 @@ async function buildApp(
 ) {
   const { default: webhookPlugin } = await import('../../src/webhook.js');
   const app = Fastify();
+
+  // Mirror the preParsing hook from index.ts so rawBody is available
+  app.addHook('preParsing', async (request, _reply, payload) => {
+    const chunks: Buffer[] = [];
+    for await (const chunk of payload) {
+      chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+    }
+    const rawBody = Buffer.concat(chunks);
+    (request as any).rawBody = rawBody;
+    return Readable.from(rawBody);
+  });
+
   await app.register(webhookPlugin, { handleMessage });
   return { app, handleMessage };
 }

@@ -62,16 +62,22 @@ const webhookPlugin: FastifyPluginAsync<WebhookPluginOptions> = async (
       console.log(
         JSON.stringify({
           event: 'webhook_rejected',
-          reason: 'invalid_signature',
+          reason: 'missing_signature',
           timestamp: new Date().toISOString(),
         }),
       );
       return reply.status(401).send({ error: 'Invalid signature' });
     }
 
+    // Use the raw body bytes for HMAC — NOT JSON.stringify(request.body).
+    // Kapso signs the exact bytes it sends; re-serializing the parsed object
+    // can change key order, whitespace, or number formatting and break the match.
+    const rawBody = (request as any).rawBody as Buffer | undefined;
+    const bodyForHmac = rawBody ?? Buffer.from(JSON.stringify(request.body));
+
     const expected = crypto
       .createHmac('sha256', KAPSO_WEBHOOK_SECRET)
-      .update(JSON.stringify(request.body))
+      .update(bodyForHmac)
       .digest('hex');
 
     const sigBuf = Buffer.from(signature);
@@ -85,6 +91,8 @@ const webhookPlugin: FastifyPluginAsync<WebhookPluginOptions> = async (
         JSON.stringify({
           event: 'webhook_rejected',
           reason: 'invalid_signature',
+          bodyLength: bodyForHmac.length,
+          hasRawBody: !!rawBody,
           timestamp: new Date().toISOString(),
         }),
       );

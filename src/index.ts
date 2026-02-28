@@ -1,9 +1,22 @@
+import { Readable } from 'node:stream';
 import Fastify from 'fastify';
 import webhookPlugin from './webhook.js';
 import { handleMessage } from './handler.js';
 import { PORT } from './config.js';
 
 const server = Fastify();
+
+// Capture raw body for webhook signature verification.
+// Kapso signs the raw bytes — we must HMAC the same bytes, not re-serialized JSON.
+server.addHook('preParsing', async (request, _reply, payload) => {
+  const chunks: Buffer[] = [];
+  for await (const chunk of payload) {
+    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+  }
+  const rawBody = Buffer.concat(chunks);
+  (request as any).rawBody = rawBody;
+  return Readable.from(rawBody);
+});
 
 server.setErrorHandler((error: Error, _request, reply) => {
   const statusCode = 'statusCode' in error ? (error as { statusCode: number }).statusCode : 500;
