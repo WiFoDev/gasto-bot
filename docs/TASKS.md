@@ -221,7 +221,7 @@
 
 ## Phase 7 — Polish & Hardening
 
-- [ ] TASK-27: Help command
+- [x] TASK-27: Help command
   - Scope: extend `src/handler.ts`, extend `src/formatter.ts`
   - Details: `help` intent → return formatted help text. Include: how to log ("just type: almuerzo 35 soles"), how to query ("how much this week?"), how to set budget ("set food budget 800 monthly"), how to correct ("wrong, it's transport"), how to delete ("delete that"). Bilingual: respond in the language the user used (or default Spanish). Keep it short — max 10 lines.
   - Tests: extend formatter tests — verify help output
