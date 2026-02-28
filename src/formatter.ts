@@ -217,6 +217,10 @@ export function formatNoBudget(category: Category | null): string {
   return `No budget set for ${label}. Try "set ${category?.slug ?? ''} budget 500 monthly"`;
 }
 
+export function formatExpenseCancelled(): string {
+  return 'Got it, cancelled.';
+}
+
 export function formatUnknownUser(): string {
   return 'This is a personal bot.';
 }

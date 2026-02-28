@@ -38,6 +38,7 @@ import {
   formatReceiptUnclear,
   formatUnknownUser,
   formatUnknown,
+  formatExpenseCancelled,
 } from './formatter.js';
 import { CONFIDENCE_AUTO_LOG, CONFIDENCE_CONFIRM } from './config.js';
 import type { Category, Expense, ParseResult, PendingExpense, User } from './types.js';
@@ -458,7 +459,8 @@ async function handleImageMessage(
 }
 
 const MAX_MESSAGE_LENGTH = 500;
-const CONFIRM_PATTERN = /^(yes|y|si|sí|ok|dale)$/i;
+const CONFIRM_PATTERN = /^(yes|y|yep|yeah|sure|si|sí|sip|sep|ok|okay|dale|claro|va)$/i;
+const DENY_PATTERN = /^(no|nop|nope|nah|nel|cancel|cancelar)$/i;
 
 function classifyError(error: unknown): string {
   if (typeof error === 'object' && error !== null) {
@@ -538,7 +540,8 @@ async function handleMessageInner(
 
   // 6. Handle awaiting_confirmation
   if (state?.lastAction === 'awaiting_confirmation' && state.pendingExpense) {
-    if (CONFIRM_PATTERN.test(content.trim())) {
+    const trimmed = content.trim();
+    if (CONFIRM_PATTERN.test(trimmed)) {
       const { expense, category } = await resolveAndInsertExpense(
         user,
         state.pendingExpense,
@@ -552,7 +555,11 @@ async function handleMessageInner(
       });
       return formatExpenseConfirmation(expense, category);
     }
-    // Not confirmed — clear state, fall through to re-parse
+    if (DENY_PATTERN.test(trimmed)) {
+      clearState(phone);
+      return formatExpenseCancelled();
+    }
+    // Not confirmed — clear state, fall through to re-parse as new message
     clearState(phone);
   }
 

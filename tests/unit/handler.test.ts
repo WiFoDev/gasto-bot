@@ -59,7 +59,7 @@ import {
   getExpensesSummary,
 } from '../../src/db.js';
 import { getState, setState, clearState } from '../../src/state.js';
-import { formatHelp, formatError, formatUnknown, formatParseError, formatDatabaseError, formatNoExpenseToModify, formatReceiptUnclear, formatUnknownUser } from '../../src/formatter.js';
+import { formatHelp, formatError, formatUnknown, formatParseError, formatDatabaseError, formatNoExpenseToModify, formatReceiptUnclear, formatUnknownUser, formatExpenseCancelled } from '../../src/formatter.js';
 import type {
   User,
   Category,
@@ -749,6 +749,43 @@ describe('handleMessage', () => {
 
       expect(result).toContain('✅');
       expect(mockedInsertExpense).toHaveBeenCalledOnce();
+    });
+
+    it('logs expense when user confirms with "sip" (casual Spanish)', async () => {
+      const result = await handleMessage(PHONE, 'text', 'sip');
+
+      expect(result).toContain('✅');
+      expect(mockedInsertExpense).toHaveBeenCalledOnce();
+    });
+
+    it('logs expense when user confirms with "dale"', async () => {
+      const result = await handleMessage(PHONE, 'text', 'dale');
+
+      expect(result).toContain('✅');
+      expect(mockedInsertExpense).toHaveBeenCalledOnce();
+    });
+
+    it('logs expense when user confirms with "claro"', async () => {
+      const result = await handleMessage(PHONE, 'text', 'claro');
+
+      expect(result).toContain('✅');
+      expect(mockedInsertExpense).toHaveBeenCalledOnce();
+    });
+
+    it('cancels expense when user denies with "no"', async () => {
+      const result = await handleMessage(PHONE, 'text', 'no');
+
+      expect(result).toBe(formatExpenseCancelled());
+      expect(mockedInsertExpense).not.toHaveBeenCalled();
+      const state = getState(PHONE);
+      expect(state).toBeNull();
+    });
+
+    it('cancels expense when user denies with "nope"', async () => {
+      const result = await handleMessage(PHONE, 'text', 'nope');
+
+      expect(result).toBe(formatExpenseCancelled());
+      expect(mockedInsertExpense).not.toHaveBeenCalled();
     });
 
     it('sets state to expense_logged after confirmation', async () => {
