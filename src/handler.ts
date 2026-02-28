@@ -1,9 +1,22 @@
-import { getUserByPhone, getCategories, getCategoryBySlug, insertExpense } from './db.js';
+import {
+  getUserByPhone,
+  getCategories,
+  getCategoryBySlug,
+  insertExpense,
+  getExpenseById,
+  getLastExpense,
+  updateExpense,
+  softDeleteExpense,
+} from './db.js';
 import { parseMessage } from './parse.js';
 import { getState, setState, clearState } from './state.js';
 import {
   formatExpenseConfirmation,
   formatClarification,
+  formatCorrection,
+  formatAmountCorrection,
+  formatDeletion,
+  formatNoExpenseToModify,
   formatError,
   formatHelp,
   formatCurrency,
@@ -132,6 +145,86 @@ async function handleLogExpense(
   return formatClarification(pending);
 }
 
+async function resolveLastExpense(
+  phone: string,
+  user: User,
+): Promise<Expense | null> {
+  const state = getState(phone);
+  if (state?.lastExpenseId) {
+    return getExpenseById(state.lastExpenseId);
+  }
+  return getLastExpense(user.id);
+}
+
+async function handleCorrectExpense(
+  phone: string,
+  user: User,
+  categories: Category[],
+  result: ParseResult,
+): Promise<string> {
+  const expense = await resolveLastExpense(phone, user);
+  if (!expense) {
+    return formatNoExpenseToModify();
+  }
+
+  if (result.correction_field === 'category' && result.category_slug) {
+    const newCategory = await getCategoryBySlug(user.id, result.category_slug);
+    if (!newCategory) return formatError();
+
+    const oldCategory = categories.find((c) => c.id === expense.category_id);
+    if (!oldCategory) return formatError();
+
+    const updated = await updateExpense(expense.id, { category_id: newCategory.id });
+    setState(phone, {
+      lastAction: 'expense_logged',
+      pendingExpense: null,
+      lastExpenseId: updated.id,
+      updatedAt: Date.now(),
+    });
+    return formatCorrection(updated, oldCategory, newCategory);
+  }
+
+  if (result.correction_field === 'amount' && result.amount != null) {
+    const oldAmount = expense.amount;
+    const category = categories.find((c) => c.id === expense.category_id);
+    if (!category) return formatError();
+
+    const updated = await updateExpense(expense.id, { amount: result.amount });
+    setState(phone, {
+      lastAction: 'expense_logged',
+      pendingExpense: null,
+      lastExpenseId: updated.id,
+      updatedAt: Date.now(),
+    });
+    return formatAmountCorrection(updated, category, oldAmount);
+  }
+
+  return formatError();
+}
+
+async function handleDeleteExpense(
+  phone: string,
+  user: User,
+  categories: Category[],
+): Promise<string> {
+  const expense = await resolveLastExpense(phone, user);
+  if (!expense) {
+    return formatNoExpenseToModify();
+  }
+
+  const category = categories.find((c) => c.id === expense.category_id);
+  if (!category) return formatError();
+
+  const deleted = await softDeleteExpense(expense.id);
+  setState(phone, {
+    lastAction: 'expense_logged',
+    pendingExpense: null,
+    lastExpenseId: null,
+    updatedAt: Date.now(),
+  });
+  return formatDeletion(deleted, category);
+}
+
 const CONFIRM_PATTERN = /^(yes|y|si|sí|ok|dale)$/i;
 
 export async function handleMessage(
@@ -202,6 +295,10 @@ export async function handleMessage(
   switch (result.intent) {
     case 'log_expense':
       return handleLogExpense(phone, user, categories, result, content);
+    case 'correct_expense':
+      return handleCorrectExpense(phone, user, categories, result);
+    case 'delete_expense':
+      return handleDeleteExpense(phone, user, categories);
     case 'help':
       return formatHelp();
     case 'unknown':

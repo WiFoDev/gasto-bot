@@ -159,13 +159,13 @@
 
 ## Phase 5 — Corrections & Deletions
 
-- [ ] TASK-20: Correction flow
+- [x] TASK-20: Correction flow
   - Scope: extend `src/handler.ts`, extend `src/db.ts`, extend `src/formatter.ts`
   - Details: `correct_expense` intent: get `lastExpenseId` from state (or query `getLastExpense`). Extract what's being corrected from ParseResult (new category slug, or new amount). Call `updateExpense()`. `formatCorrection(expense, oldCategory, newCategory)` → "✅ Updated: S/12.50 — Transport (was: Food & Dining)". After any successful expense log, store `lastExpenseId` in state so corrections work.
   - Tests: extend handler tests — log expense → send correction → verify update. Test: correct category, correct amount, correct when no prior expense (error message).
   - Depends on: TASK-15
 
-- [ ] TASK-21: Deletion flow
+- [x] TASK-21: Deletion flow
   - Scope: extend `src/handler.ts`, extend `src/formatter.ts`
   - Details: `delete_expense` intent: get last expense → `softDeleteExpense(id)` → `formatDeletion(expense)` → "🗑️ Deleted: S/12.50 — Transport · Feb 25". Handle: no prior expense to delete (error message). After deletion, clear `lastExpenseId` from state.
   - Tests: extend handler tests — log expense → send "delete that" → verify soft deleted → send "delete that" again → error message.

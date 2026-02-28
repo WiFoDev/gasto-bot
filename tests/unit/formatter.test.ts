@@ -2,6 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   formatExpenseConfirmation,
   formatClarification,
+  formatCorrection,
+  formatAmountCorrection,
+  formatDeletion,
+  formatNoExpenseToModify,
   formatError,
   formatHelp,
   formatCurrency,
@@ -200,6 +204,92 @@ describe('formatClarification', () => {
     const result = formatClarification(makePendingExpense());
     expect(result).toMatchInlineSnapshot(
       `"Got it — S/50.00. What was it for?"`,
+    );
+  });
+});
+
+// ── formatCorrection ─────────────────────────────────────────────────
+
+describe('formatCorrection', () => {
+  it('shows updated category with old category', () => {
+    const expense = makeExpense({ amount: 12.5, currency: 'PEN' });
+    const oldCat = makeCategory({ name: 'Food & Dining', icon: '🍽' });
+    const newCat = makeCategory({ name: 'Transport', icon: '🚗', slug: 'transport' });
+    const result = formatCorrection(expense, oldCat, newCat);
+    expect(result).toContain('Updated');
+    expect(result).toContain('S/12.50');
+    expect(result).toContain('Transport');
+    expect(result).toContain('was:');
+    expect(result).toContain('Food & Dining');
+  });
+
+  it('snapshot: category correction', () => {
+    const expense = makeExpense({ amount: 12.5 });
+    const oldCat = makeCategory({ name: 'Food & Dining', icon: '🍽' });
+    const newCat = makeCategory({ name: 'Transport', icon: '🚗' });
+    expect(formatCorrection(expense, oldCat, newCat)).toMatchInlineSnapshot(
+      `"✅ Updated: S/12.50 — 🚗 Transport (was: 🍽 Food & Dining)"`,
+    );
+  });
+});
+
+// ── formatAmountCorrection ──────────────────────────────────────────
+
+describe('formatAmountCorrection', () => {
+  it('shows updated amount with old amount', () => {
+    const expense = makeExpense({ amount: 40 });
+    const cat = makeCategory();
+    const result = formatAmountCorrection(expense, cat, 35);
+    expect(result).toContain('Updated');
+    expect(result).toContain('S/40.00');
+    expect(result).toContain('was:');
+    expect(result).toContain('S/35.00');
+  });
+
+  it('snapshot: amount correction', () => {
+    const expense = makeExpense({ amount: 40 });
+    const cat = makeCategory();
+    expect(formatAmountCorrection(expense, cat, 35)).toMatchInlineSnapshot(
+      `"✅ Updated: S/40.00 — 🍽 Food & Dining (was: S/35.00)"`,
+    );
+  });
+});
+
+// ── formatDeletion ──────────────────────────────────────────────────
+
+describe('formatDeletion', () => {
+  it('shows deleted expense details', () => {
+    const expense = makeExpense({ amount: 12.5, date: '2026-02-25' });
+    const cat = makeCategory({ name: 'Transport', icon: '🚗' });
+    const result = formatDeletion(expense, cat);
+    expect(result).toContain('🗑️');
+    expect(result).toContain('Deleted');
+    expect(result).toContain('S/12.50');
+    expect(result).toContain('Transport');
+    expect(result).toContain('Feb 25');
+  });
+
+  it('snapshot: standard deletion', () => {
+    const expense = makeExpense({ amount: 12.5, date: '2026-02-25' });
+    const cat = makeCategory({ name: 'Transport', icon: '🚗' });
+    expect(formatDeletion(expense, cat)).toMatchInlineSnapshot(
+      `"🗑️ Deleted: S/12.50 — 🚗 Transport · Feb 25"`,
+    );
+  });
+});
+
+// ── formatNoExpenseToModify ─────────────────────────────────────────
+
+describe('formatNoExpenseToModify', () => {
+  it('returns a user-friendly message', () => {
+    const result = formatNoExpenseToModify();
+    expect(result).toBeTruthy();
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('snapshot', () => {
+    expect(formatNoExpenseToModify()).toMatchInlineSnapshot(
+      `"No recent expense to modify."`,
     );
   });
 });

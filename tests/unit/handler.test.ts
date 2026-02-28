@@ -19,6 +19,10 @@ vi.mock('../../src/db.js', () => ({
   getCategories: vi.fn(),
   getCategoryBySlug: vi.fn(),
   insertExpense: vi.fn(),
+  getExpenseById: vi.fn(),
+  getLastExpense: vi.fn(),
+  updateExpense: vi.fn(),
+  softDeleteExpense: vi.fn(),
 }));
 
 import { handleMessage } from '../../src/handler.js';
@@ -28,9 +32,13 @@ import {
   getCategories,
   getCategoryBySlug,
   insertExpense,
+  getExpenseById,
+  getLastExpense,
+  updateExpense,
+  softDeleteExpense,
 } from '../../src/db.js';
 import { getState, setState, clearState } from '../../src/state.js';
-import { formatHelp, formatError } from '../../src/formatter.js';
+import { formatHelp, formatError, formatNoExpenseToModify } from '../../src/formatter.js';
 import type {
   User,
   Category,
@@ -140,6 +148,10 @@ const mockedGetUserByPhone = getUserByPhone as ReturnType<typeof vi.fn>;
 const mockedGetCategories = getCategories as ReturnType<typeof vi.fn>;
 const mockedGetCategoryBySlug = getCategoryBySlug as ReturnType<typeof vi.fn>;
 const mockedInsertExpense = insertExpense as ReturnType<typeof vi.fn>;
+const mockedGetExpenseById = getExpenseById as ReturnType<typeof vi.fn>;
+const mockedGetLastExpense = getLastExpense as ReturnType<typeof vi.fn>;
+const mockedUpdateExpense = updateExpense as ReturnType<typeof vi.fn>;
+const mockedSoftDeleteExpense = softDeleteExpense as ReturnType<typeof vi.fn>;
 const mockedParseMessage = parseMessage as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
@@ -160,6 +172,14 @@ beforeEach(() => {
       deleted_at: null,
       created_at: '2026-02-27T12:00:00Z',
     }),
+  );
+  mockedGetExpenseById.mockResolvedValue(null);
+  mockedGetLastExpense.mockResolvedValue(null);
+  mockedUpdateExpense.mockImplementation(async (id: string, fields: Partial<Expense>) =>
+    makeExpense({ id, ...fields }),
+  );
+  mockedSoftDeleteExpense.mockImplementation(async (id: string) =>
+    makeExpense({ id, deleted_at: new Date().toISOString() }),
   );
 });
 
@@ -545,7 +565,230 @@ describe('handleMessage', () => {
     });
   });
 
-  describe('unimplemented intents (Phase 4-5)', () => {
+  describe('correct_expense flow', () => {
+    it('corrects category when lastExpenseId is in state', async () => {
+      // Set state as if expense was just logged
+      setState(PHONE, {
+        lastAction: 'expense_logged',
+        pendingExpense: null,
+        lastExpenseId: 'exp-1',
+        updatedAt: Date.now(),
+      });
+      mockedGetExpenseById.mockResolvedValue(
+        makeExpense({ id: 'exp-1', category_id: 'cat-food' }),
+      );
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'correct_expense',
+          confidence: 0.9,
+          correction_field: 'category',
+          category_slug: 'transport',
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'wrong, it was transport');
+
+      expect(result).toContain('Updated');
+      expect(result).toContain('Transport');
+      expect(result).toContain('was:');
+      expect(result).toContain('Food & Dining');
+      expect(mockedUpdateExpense).toHaveBeenCalledWith('exp-1', { category_id: 'cat-transport' });
+    });
+
+    it('corrects amount when lastExpenseId is in state', async () => {
+      setState(PHONE, {
+        lastAction: 'expense_logged',
+        pendingExpense: null,
+        lastExpenseId: 'exp-1',
+        updatedAt: Date.now(),
+      });
+      mockedGetExpenseById.mockResolvedValue(
+        makeExpense({ id: 'exp-1', amount: 35, category_id: 'cat-food' }),
+      );
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'correct_expense',
+          confidence: 0.9,
+          correction_field: 'amount',
+          amount: 40,
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'no era 40');
+
+      expect(result).toContain('Updated');
+      expect(result).toContain('S/40.00');
+      expect(result).toContain('was:');
+      expect(result).toContain('S/35.00');
+      expect(mockedUpdateExpense).toHaveBeenCalledWith('exp-1', { amount: 40 });
+    });
+
+    it('falls back to getLastExpense when no state exists', async () => {
+      mockedGetLastExpense.mockResolvedValue(
+        makeExpense({ id: 'exp-last', category_id: 'cat-food' }),
+      );
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'correct_expense',
+          confidence: 0.9,
+          correction_field: 'category',
+          category_slug: 'transport',
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'wrong, it was transport');
+
+      expect(result).toContain('Updated');
+      expect(mockedGetLastExpense).toHaveBeenCalledWith('user-1');
+      expect(mockedUpdateExpense).toHaveBeenCalledWith('exp-last', { category_id: 'cat-transport' });
+    });
+
+    it('returns error when no prior expense exists', async () => {
+      mockedGetExpenseById.mockResolvedValue(null);
+      mockedGetLastExpense.mockResolvedValue(null);
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'correct_expense',
+          confidence: 0.9,
+          correction_field: 'category',
+          category_slug: 'transport',
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'wrong, it was transport');
+
+      expect(result).toBe(formatNoExpenseToModify());
+      expect(mockedUpdateExpense).not.toHaveBeenCalled();
+    });
+
+    it('updates state with corrected expense id', async () => {
+      setState(PHONE, {
+        lastAction: 'expense_logged',
+        pendingExpense: null,
+        lastExpenseId: 'exp-1',
+        updatedAt: Date.now(),
+      });
+      mockedGetExpenseById.mockResolvedValue(
+        makeExpense({ id: 'exp-1', category_id: 'cat-food' }),
+      );
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'correct_expense',
+          confidence: 0.9,
+          correction_field: 'category',
+          category_slug: 'transport',
+        }),
+      );
+
+      await handleMessage(PHONE, 'text', 'wrong, it was transport');
+
+      const state = getState(PHONE);
+      expect(state).not.toBeNull();
+      expect(state!.lastAction).toBe('expense_logged');
+      expect(state!.lastExpenseId).toBe('exp-1');
+    });
+  });
+
+  describe('delete_expense flow', () => {
+    it('soft-deletes expense when lastExpenseId is in state', async () => {
+      setState(PHONE, {
+        lastAction: 'expense_logged',
+        pendingExpense: null,
+        lastExpenseId: 'exp-1',
+        updatedAt: Date.now(),
+      });
+      mockedGetExpenseById.mockResolvedValue(
+        makeExpense({ id: 'exp-1', category_id: 'cat-food' }),
+      );
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'delete_expense', confidence: 0.9 }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'delete that');
+
+      expect(result).toContain('Deleted');
+      expect(result).toContain('S/35.00');
+      expect(result).toContain('Food & Dining');
+      expect(mockedSoftDeleteExpense).toHaveBeenCalledWith('exp-1');
+    });
+
+    it('clears lastExpenseId from state after deletion', async () => {
+      setState(PHONE, {
+        lastAction: 'expense_logged',
+        pendingExpense: null,
+        lastExpenseId: 'exp-1',
+        updatedAt: Date.now(),
+      });
+      mockedGetExpenseById.mockResolvedValue(
+        makeExpense({ id: 'exp-1', category_id: 'cat-food' }),
+      );
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'delete_expense', confidence: 0.9 }),
+      );
+
+      await handleMessage(PHONE, 'text', 'delete that');
+
+      const state = getState(PHONE);
+      expect(state).not.toBeNull();
+      expect(state!.lastExpenseId).toBeNull();
+    });
+
+    it('returns error when no prior expense exists', async () => {
+      mockedGetExpenseById.mockResolvedValue(null);
+      mockedGetLastExpense.mockResolvedValue(null);
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'delete_expense', confidence: 0.9 }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'delete that');
+
+      expect(result).toBe(formatNoExpenseToModify());
+      expect(mockedSoftDeleteExpense).not.toHaveBeenCalled();
+    });
+
+    it('cannot delete the same expense twice', async () => {
+      // First deletion
+      setState(PHONE, {
+        lastAction: 'expense_logged',
+        pendingExpense: null,
+        lastExpenseId: 'exp-1',
+        updatedAt: Date.now(),
+      });
+      mockedGetExpenseById.mockResolvedValue(
+        makeExpense({ id: 'exp-1', category_id: 'cat-food' }),
+      );
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'delete_expense', confidence: 0.9 }),
+      );
+      await handleMessage(PHONE, 'text', 'delete that');
+
+      // State now has lastExpenseId: null
+      // Second deletion — no expense to delete
+      mockedGetExpenseById.mockResolvedValue(null);
+      mockedGetLastExpense.mockResolvedValue(null);
+      const result = await handleMessage(PHONE, 'text', 'delete that');
+
+      expect(result).toBe(formatNoExpenseToModify());
+      expect(mockedSoftDeleteExpense).toHaveBeenCalledTimes(1);
+    });
+
+    it('falls back to getLastExpense when no state exists', async () => {
+      mockedGetLastExpense.mockResolvedValue(
+        makeExpense({ id: 'exp-last', category_id: 'cat-food' }),
+      );
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'delete_expense', confidence: 0.9 }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'borra eso');
+
+      expect(result).toContain('Deleted');
+      expect(mockedGetLastExpense).toHaveBeenCalledWith('user-1');
+      expect(mockedSoftDeleteExpense).toHaveBeenCalledWith('exp-last');
+    });
+  });
+
+  describe('unimplemented intents (Phase 4)', () => {
     it('returns error for query_summary intent', async () => {
       mockedParseMessage.mockResolvedValue(
         makeParseResult({ intent: 'query_summary', confidence: 0.9 }),

@@ -65,6 +65,35 @@ export function formatError(): string {
   return 'Something went wrong, try again.';
 }
 
+export function formatCorrection(
+  expense: Expense,
+  oldCategory: Category,
+  newCategory: Category,
+): string {
+  const amount = formatCurrency(expense.amount, expense.currency);
+  return `✅ Updated: ${amount} — ${newCategory.icon} ${newCategory.name} (was: ${oldCategory.icon} ${oldCategory.name})`;
+}
+
+export function formatAmountCorrection(
+  expense: Expense,
+  category: Category,
+  oldAmount: number,
+): string {
+  const newAmount = formatCurrency(expense.amount, expense.currency);
+  const old = formatCurrency(oldAmount, expense.currency);
+  return `✅ Updated: ${newAmount} — ${category.icon} ${category.name} (was: ${old})`;
+}
+
+export function formatDeletion(expense: Expense, category: Category): string {
+  const amount = formatCurrency(expense.amount, expense.currency);
+  const date = formatDate(expense.date);
+  return `🗑️ Deleted: ${amount} — ${category.icon} ${category.name} · ${date}`;
+}
+
+export function formatNoExpenseToModify(): string {
+  return 'No recent expense to modify.';
+}
+
 export function formatHelp(): string {
   return `Here's what I can do:
 
