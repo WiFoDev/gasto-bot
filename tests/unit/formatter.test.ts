@@ -12,8 +12,9 @@ import {
   formatBudgetConfirmation,
   formatBudgetStatus,
   formatNoBudget,
+  formatSummary,
 } from '../../src/formatter.js';
-import type { Expense, Category, PendingExpense, Budget } from '../../src/types.js';
+import type { Expense, Category, PendingExpense, Budget, SummaryResult } from '../../src/types.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -391,6 +392,22 @@ function makeBudget(overrides: Partial<Budget> = {}): Budget {
   };
 }
 
+// ── formatSummary helper ────────────────────────────────────────────
+
+function makeSummary(overrides: Partial<SummaryResult> = {}): SummaryResult {
+  return {
+    total: 342.5,
+    byCategory: [
+      { slug: 'food_dining', name: 'Food & Dining', icon: '🍽', total: 185 },
+      { slug: 'transport', name: 'Transport', icon: '🚗', total: 87.5 },
+      { slug: 'groceries', name: 'Groceries', icon: '🛒', total: 70 },
+    ],
+    startDate: '2026-02-19',
+    endDate: '2026-02-25',
+    ...overrides,
+  };
+}
+
 // ── formatBudgetConfirmation ────────────────────────────────────────
 
 describe('formatBudgetConfirmation', () => {
@@ -528,5 +545,119 @@ describe('formatNoBudget', () => {
     const result = formatNoBudget(null);
     expect(result).toContain('overall');
     expect(result).toContain('No budget set');
+  });
+});
+
+describe('formatSummary', () => {
+  it('includes period header with date range', () => {
+    const result = formatSummary(makeSummary(), 'week', 'PEN');
+    expect(result).toContain('📊');
+    expect(result).toContain('This Week');
+    expect(result).toContain('Feb 19');
+    expect(result).toContain('Feb 25');
+  });
+
+  it('includes total amount', () => {
+    const result = formatSummary(makeSummary(), 'week', 'PEN');
+    expect(result).toContain('S/342.50');
+  });
+
+  it('lists categories sorted by total descending', () => {
+    const result = formatSummary(makeSummary(), 'week', 'PEN');
+    const foodIdx = result.indexOf('Food & Dining');
+    const transportIdx = result.indexOf('Transport');
+    const groceriesIdx = result.indexOf('Groceries');
+    expect(foodIdx).toBeLessThan(transportIdx);
+    expect(transportIdx).toBeLessThan(groceriesIdx);
+  });
+
+  it('includes category icons and amounts', () => {
+    const result = formatSummary(makeSummary(), 'week', 'PEN');
+    expect(result).toContain('🍽 Food & Dining');
+    expect(result).toContain('S/185.00');
+    expect(result).toContain('🚗 Transport');
+    expect(result).toContain('S/87.50');
+  });
+
+  it('shows "No expenses recorded." for empty period', () => {
+    const result = formatSummary(
+      makeSummary({ total: 0, byCategory: [] }),
+      'week',
+      'PEN',
+    );
+    expect(result).toContain('No expenses recorded.');
+    expect(result).toContain('S/0.00');
+  });
+
+  it('formats today period correctly', () => {
+    const result = formatSummary(
+      makeSummary({ startDate: '2026-02-25', endDate: '2026-02-25' }),
+      'today',
+      'PEN',
+    );
+    expect(result).toContain('Today');
+    expect(result).toContain('Feb 25');
+  });
+
+  it('formats month period correctly', () => {
+    const result = formatSummary(
+      makeSummary({ startDate: '2026-02-01', endDate: '2026-02-25' }),
+      'month',
+      'PEN',
+    );
+    expect(result).toContain('This Month');
+    expect(result).toContain('Feb 1');
+    expect(result).toContain('Feb 25');
+  });
+
+  it('formats USD currency', () => {
+    const result = formatSummary(makeSummary({ total: 100 }), 'week', 'USD');
+    expect(result).toContain('$100.00');
+  });
+
+  it('snapshot: week summary', () => {
+    expect(formatSummary(makeSummary(), 'week', 'PEN')).toMatchInlineSnapshot(`
+      "📊 This Week (Feb 19–Feb 25)
+      Total: S/342.50
+
+      🍽 Food & Dining  S/185.00
+      🚗 Transport  S/87.50
+      🛒 Groceries  S/70.00"
+    `);
+  });
+
+  it('snapshot: empty today', () => {
+    expect(
+      formatSummary(
+        makeSummary({ total: 0, byCategory: [], startDate: '2026-02-25', endDate: '2026-02-25' }),
+        'today',
+        'PEN',
+      ),
+    ).toMatchInlineSnapshot(`
+      "📊 Today (Feb 25)
+      Total: S/0.00
+
+      No expenses recorded."
+    `);
+  });
+
+  it('snapshot: month summary with single category', () => {
+    expect(
+      formatSummary(
+        makeSummary({
+          total: 250,
+          byCategory: [{ slug: 'food_dining', name: 'Food & Dining', icon: '🍽', total: 250 }],
+          startDate: '2026-02-01',
+          endDate: '2026-02-25',
+        }),
+        'month',
+        'PEN',
+      ),
+    ).toMatchInlineSnapshot(`
+      "📊 This Month (Feb 1–Feb 25)
+      Total: S/250.00
+
+      🍽 Food & Dining  S/250.00"
+    `);
   });
 });

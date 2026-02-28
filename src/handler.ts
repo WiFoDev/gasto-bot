@@ -10,6 +10,8 @@ import {
   upsertBudget,
   getBudget,
   getExpensesTotal,
+  getDateRange,
+  getExpensesSummary,
 } from './db.js';
 import { parseMessage } from './parse.js';
 import { getState, setState, clearState } from './state.js';
@@ -26,6 +28,7 @@ import {
   formatBudgetConfirmation,
   formatBudgetStatus,
   formatNoBudget,
+  formatSummary,
 } from './formatter.js';
 import { CONFIDENCE_AUTO_LOG, CONFIDENCE_CONFIRM } from './config.js';
 import type { Category, Expense, ParseResult, PendingExpense, User } from './types.js';
@@ -439,6 +442,12 @@ export async function handleMessage(
       return handleSetBudget(user, categories, result);
     case 'query_budget':
       return handleQueryBudget(user, categories, result);
+    case 'query_summary': {
+      const period = result.period ?? 'month';
+      const { start, end } = getDateRange(period, user.timezone);
+      const summary = await getExpensesSummary(user.id, start, end);
+      return formatSummary(summary, period, user.currency);
+    }
     case 'help':
       return formatHelp();
     case 'unknown':

@@ -1,4 +1,4 @@
-import type { Expense, Category, PendingExpense, Budget } from './types.js';
+import type { Expense, Category, PendingExpense, Budget, SummaryResult } from './types.js';
 
 const MAX_DESCRIPTION_LENGTH = 50;
 
@@ -139,6 +139,47 @@ export function formatBudgetStatus(
     msg += `\n🚨 Over budget by ${overAmount}!`;
   } else if (percentage >= 80) {
     msg += `\n⚠️ ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} left in ${periodLabel}`;
+  }
+  return msg;
+}
+
+function formatPeriodHeader(
+  period: 'today' | 'week' | 'month',
+  startDate: string,
+  endDate: string,
+): string {
+  const start = formatDate(startDate);
+  const end = formatDate(endDate);
+
+  switch (period) {
+    case 'today':
+      return `Today (${start})`;
+    case 'week':
+      return startDate === endDate ? `This Week (${start})` : `This Week (${start}–${end})`;
+    case 'month':
+      return startDate === endDate ? `This Month (${start})` : `This Month (${start}–${end})`;
+  }
+}
+
+export function formatSummary(
+  summary: SummaryResult,
+  period: 'today' | 'week' | 'month',
+  currency: string,
+): string {
+  const header = formatPeriodHeader(period, summary.startDate, summary.endDate);
+  const total = formatCurrency(summary.total, currency);
+
+  let msg = `📊 ${header}\nTotal: ${total}`;
+
+  if (summary.byCategory.length === 0) {
+    msg += '\n\nNo expenses recorded.';
+    return msg;
+  }
+
+  msg += '\n';
+  for (const cat of summary.byCategory) {
+    const amount = formatCurrency(cat.total, currency);
+    msg += `\n${cat.icon} ${cat.name}  ${amount}`;
   }
 
   return msg;

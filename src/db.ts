@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
-import type { User, Category, Expense, Budget } from './types.js';
+import type { User, Category, Expense, CategoryTotal, SummaryResult, Budget } from './types.js';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -199,4 +199,74 @@ export async function getExpensesTotal(
 
   if (error) throw error;
   return (data ?? []).reduce((sum, e) => sum + Number(e.amount), 0);
+}
+
+export function getDateRange(
+  period: 'today' | 'week' | 'month',
+  timezone: string,
+): { start: string; end: string } {
+  const now = new Date();
+  const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(now);
+
+  if (period === 'today') {
+    return { start: todayStr, end: todayStr };
+  }
+
+  if (period === 'month') {
+    const monthStart = todayStr.slice(0, 8) + '01';
+    return { start: monthStart, end: todayStr };
+  }
+
+  // period === 'week' — Monday-based
+  const [year, month, day] = todayStr.split('-').map(Number);
+  const todayDate = new Date(Date.UTC(year, month - 1, day));
+  const dayOfWeek = todayDate.getUTCDay(); // 0=Sun, 1=Mon, ...
+  const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const monday = new Date(todayDate);
+  monday.setUTCDate(todayDate.getUTCDate() - daysToMonday);
+  const mondayStr = monday.toISOString().split('T')[0];
+  return { start: mondayStr, end: todayStr };
+}
+
+export async function getExpensesSummary(
+  userId: string,
+  startDate: string,
+  endDate: string,
+): Promise<SummaryResult> {
+  const { data: expenses, error } = await supabase
+    .from('expenses')
+    .select('amount, categories(slug, name, icon)')
+    .eq('user_id', userId)
+    .gte('date', startDate)
+    .lte('date', endDate)
+    .is('deleted_at', null);
+
+  if (error) throw error;
+
+  const categoryTotals = new Map<string, CategoryTotal>();
+  let total = 0;
+
+  for (const exp of expenses ?? []) {
+    const amount = Number(exp.amount);
+    total += amount;
+
+    const cat = exp.categories as unknown as { slug: string; name: string; icon: string } | null;
+    if (!cat) continue;
+
+    const existing = categoryTotals.get(cat.slug);
+    if (existing) {
+      existing.total += amount;
+    } else {
+      categoryTotals.set(cat.slug, {
+        slug: cat.slug,
+        name: cat.name,
+        icon: cat.icon,
+        total: amount,
+      });
+    }
+  }
+
+  const byCategory = Array.from(categoryTotals.values()).sort((a, b) => b.total - a.total);
+
+  return { total, byCategory, startDate, endDate };
 }

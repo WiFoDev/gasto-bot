@@ -131,13 +131,13 @@
 
 ## Phase 4 — Summaries & Budgets
 
-- [ ] TASK-16: Summary query logic
+- [x] TASK-16: Summary query logic
   - Scope: extend `src/db.ts`, extend `src/handler.ts`
   - Details: Add to db.ts: `getExpensesSummary(userId, startDate, endDate)` → returns `{ total, byCategory: [{ slug, name, icon, total }] }`. Add timezone-aware date range computation: `getDateRange(period: 'today' | 'week' | 'month', timezone: string)` → `{ start: Date, end: Date }`. Use `Intl.DateTimeFormat` or `date-fns-tz` for timezone conversion. Add `query_summary` intent handling in handler.ts.
   - Tests: `tests/integration/db.test.ts` (extend) — insert expenses across date boundaries, verify summary aggregation. Test timezone edge: expense at 11pm Lima time (4am UTC next day) appears in correct "today".
   - Depends on: TASK-15
 
-- [ ] TASK-17: Summary response formatting
+- [x] TASK-17: Summary response formatting
   - Scope: extend `src/formatter.ts`
   - Details: `formatSummary(summary, period, budget?)` → multi-line WhatsApp message: "📊 This Week (Feb 19–25)\nTotal: S/342.50\n\n🍽 Food & Dining  S/185.00\n🚗 Transport  S/87.50\n...". If budget exists for period, append: "Budget: S/342.50 / S/500.00 (68%)". Format period header with actual date range. Sort categories by total descending. Skip categories with zero spend.
   - Tests: extend `tests/unit/formatter.test.ts` — snapshot summary output, test with/without budget, test empty period.

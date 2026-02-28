@@ -26,6 +26,8 @@ vi.mock('../../src/db.js', () => ({
   upsertBudget: vi.fn(),
   getBudget: vi.fn(),
   getExpensesTotal: vi.fn(),
+  getDateRange: vi.fn(),
+  getExpensesSummary: vi.fn(),
 }));
 
 import { handleMessage } from '../../src/handler.js';
@@ -42,6 +44,8 @@ import {
   upsertBudget,
   getBudget,
   getExpensesTotal,
+  getDateRange,
+  getExpensesSummary,
 } from '../../src/db.js';
 import { getState, setState, clearState } from '../../src/state.js';
 import { formatHelp, formatError, formatNoExpenseToModify } from '../../src/formatter.js';
@@ -159,6 +163,8 @@ const mockedGetExpenseById = getExpenseById as ReturnType<typeof vi.fn>;
 const mockedGetLastExpense = getLastExpense as ReturnType<typeof vi.fn>;
 const mockedUpdateExpense = updateExpense as ReturnType<typeof vi.fn>;
 const mockedSoftDeleteExpense = softDeleteExpense as ReturnType<typeof vi.fn>;
+const mockedGetDateRange = getDateRange as ReturnType<typeof vi.fn>;
+const mockedGetExpensesSummary = getExpensesSummary as ReturnType<typeof vi.fn>;
 const mockedParseMessage = parseMessage as ReturnType<typeof vi.fn>;
 const mockedUpsertBudget = upsertBudget as ReturnType<typeof vi.fn>;
 const mockedGetBudget = getBudget as ReturnType<typeof vi.fn>;
@@ -208,6 +214,17 @@ beforeEach(() => {
   mockedUpsertBudget.mockResolvedValue(makeBudget());
   mockedGetBudget.mockResolvedValue(null);
   mockedGetExpensesTotal.mockResolvedValue(0);
+  mockedGetDateRange.mockReturnValue({ start: '2026-02-24', end: '2026-02-27' });
+  mockedGetExpensesSummary.mockResolvedValue({
+    total: 342.5,
+    byCategory: [
+      { slug: 'food_dining', name: 'Food & Dining', icon: '🍽', total: 185 },
+      { slug: 'transport', name: 'Transport', icon: '🚗', total: 87.5 },
+      { slug: 'groceries', name: 'Groceries', icon: '🛒', total: 70 },
+    ],
+    startDate: '2026-02-24',
+    endDate: '2026-02-27',
+  });
 });
 
 // ── Tests ───────────────────────────────────────────────────────────
@@ -815,15 +832,45 @@ describe('handleMessage', () => {
     });
   });
 
-  describe('unimplemented intents (Phase 4)', () => {
-    it('returns error for query_summary intent', async () => {
+  describe('query_summary intent', () => {
+    it('returns formatted summary for week query', async () => {
       mockedParseMessage.mockResolvedValue(
-        makeParseResult({ intent: 'query_summary', confidence: 0.9 }),
+        makeParseResult({ intent: 'query_summary', confidence: 0.9, period: 'week' }),
       );
 
       const result = await handleMessage(PHONE, 'text', 'how much this week?');
 
-      expect(result).toBe(formatError());
+      expect(result).toContain('📊');
+      expect(result).toContain('S/342.50');
+      expect(result).toContain('Food & Dining');
+      expect(mockedGetDateRange).toHaveBeenCalledWith('week', 'America/Lima');
+      expect(mockedGetExpensesSummary).toHaveBeenCalledWith('user-1', '2026-02-24', '2026-02-27');
+    });
+
+    it('defaults to month when period is null', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'query_summary', confidence: 0.9, period: null }),
+      );
+
+      await handleMessage(PHONE, 'text', 'how much have I spent?');
+
+      expect(mockedGetDateRange).toHaveBeenCalledWith('month', 'America/Lima');
+    });
+
+    it('returns empty summary message when no expenses', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'query_summary', confidence: 0.9, period: 'today' }),
+      );
+      mockedGetExpensesSummary.mockResolvedValue({
+        total: 0,
+        byCategory: [],
+        startDate: '2026-02-27',
+        endDate: '2026-02-27',
+      });
+
+      const result = await handleMessage(PHONE, 'text', 'what did I spend today?');
+
+      expect(result).toContain('No expenses recorded.');
     });
   });
 
@@ -855,7 +902,6 @@ describe('handleMessage', () => {
         expect.any(String),
       );
     });
-
     it('sets a weekly budget', async () => {
       mockedParseMessage.mockResolvedValue(
         makeParseResult({
