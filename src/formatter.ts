@@ -65,6 +65,10 @@ export function formatError(): string {
   return 'Something went wrong, try again.';
 }
 
+export function formatUnknown(): string {
+  return "I didn't understand that. Try something like \"almuerzo 35 soles\" or send \"help\".";
+}
+
 export function formatParseError(): string {
   return "I'm thinking too hard, try again.";
 }

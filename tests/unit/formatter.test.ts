@@ -7,6 +7,7 @@ import {
   formatDeletion,
   formatNoExpenseToModify,
   formatError,
+  formatUnknown,
   formatParseError,
   formatDatabaseError,
   formatHelp,
@@ -321,6 +322,22 @@ describe('formatError', () => {
   it('snapshot', () => {
     expect(formatError()).toMatchInlineSnapshot(
       `"Something went wrong, try again."`,
+    );
+  });
+});
+
+// ── formatUnknown ───────────────────────────────────────────────────
+
+describe('formatUnknown', () => {
+  it('returns a helpful message with example', () => {
+    const result = formatUnknown();
+    expect(result).toContain('almuerzo 35 soles');
+    expect(result).toContain('help');
+  });
+
+  it('snapshot', () => {
+    expect(formatUnknown()).toMatchInlineSnapshot(
+      `"I didn't understand that. Try something like "almuerzo 35 soles" or send "help"."`,
     );
   });
 });

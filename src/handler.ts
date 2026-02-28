@@ -37,6 +37,7 @@ import {
   formatReceiptConfirmation,
   formatReceiptUnclear,
   formatUnknownUser,
+  formatUnknown,
 } from './formatter.js';
 import { CONFIDENCE_AUTO_LOG, CONFIDENCE_CONFIRM } from './config.js';
 import type { Category, Expense, ParseResult, PendingExpense, User } from './types.js';
@@ -585,6 +586,7 @@ async function handleMessageInner(
     case 'help':
       return formatHelp();
     case 'unknown':
+      return formatUnknown();
     case 'error':
     default:
       return formatError();

@@ -59,7 +59,7 @@ import {
   getExpensesSummary,
 } from '../../src/db.js';
 import { getState, setState, clearState } from '../../src/state.js';
-import { formatHelp, formatError, formatParseError, formatDatabaseError, formatNoExpenseToModify, formatReceiptUnclear, formatUnknownUser } from '../../src/formatter.js';
+import { formatHelp, formatError, formatUnknown, formatParseError, formatDatabaseError, formatNoExpenseToModify, formatReceiptUnclear, formatUnknownUser } from '../../src/formatter.js';
 import type {
   User,
   Category,
@@ -853,14 +853,14 @@ describe('handleMessage', () => {
   });
 
   describe('unknown / error intents', () => {
-    it('returns error for unknown intent', async () => {
+    it('returns friendly message for unknown intent', async () => {
       mockedParseMessage.mockResolvedValue(
         makeParseResult({ intent: 'unknown', confidence: 0 }),
       );
 
       const result = await handleMessage(PHONE, 'text', 'asdfghjk');
 
-      expect(result).toBe(formatError());
+      expect(result).toBe(formatUnknown());
     });
 
     it('returns error for error intent', async () => {
