@@ -38,6 +38,8 @@ export async function parseMessage(
 
   const systemPrompt = expenseParserPrompt(categories, today);
 
+  const startMs = Date.now();
+
   try {
     const response = await client.messages.create({
       model: 'claude-sonnet-4-5-20250929',
@@ -55,8 +57,25 @@ export async function parseMessage(
     const jsonStr = extractJson(raw);
     const parsed = JSON.parse(jsonStr) as ParseResult;
 
+    console.log(JSON.stringify({
+      event: 'parse',
+      intent: parsed.intent,
+      confidence: parsed.confidence,
+      latency_ms: Date.now() - startMs,
+      timestamp: new Date().toISOString(),
+    }));
+
     return parsed;
   } catch (error) {
+    console.log(JSON.stringify({
+      event: 'parse',
+      intent: 'error',
+      confidence: 0,
+      latency_ms: Date.now() - startMs,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    }));
+
     if (error instanceof SyntaxError) {
       return makeErrorResult('Failed to parse AI response as JSON');
     }

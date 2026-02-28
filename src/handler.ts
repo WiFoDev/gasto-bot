@@ -135,6 +135,16 @@ async function resolveAndInsertExpense(
     ai_confidence: pending.ai_confidence,
   });
 
+  console.log(JSON.stringify({
+    event: 'expense_logged',
+    expenseId: expense.id,
+    amount: expense.amount,
+    currency: expense.currency,
+    category: resolvedCategory.slug,
+    source: pending.source,
+    timestamp: new Date().toISOString(),
+  }));
+
   return { expense, category: resolvedCategory };
 }
 

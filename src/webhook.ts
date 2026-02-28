@@ -174,6 +174,14 @@ const webhookPlugin: FastifyPluginAsync<WebhookPluginOptions> = async (
       return reply.status(200).send({ status: 'empty_message' });
     }
 
+    console.log(JSON.stringify({
+      event: 'webhook',
+      phone,
+      messageType,
+      messageId: message.id,
+      timestamp: new Date().toISOString(),
+    }));
+
     // Process message through handler
     let responseText: string;
     try {

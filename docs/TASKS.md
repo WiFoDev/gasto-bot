@@ -239,7 +239,7 @@
   - Tests: extend handler tests — inject errors from mocked dependencies, verify user-friendly messages returned
   - Depends on: TASK-15
 
-- [ ] TASK-30: Structured JSON logging
+- [x] TASK-30: Structured JSON logging
   - Scope: extend `src/handler.ts`, extend `src/parse.ts`
   - Details: Add structured JSON logs at key points: (1) Webhook received: `{ event: 'webhook', phone, messageType, timestamp }`. (2) Parse complete: `{ event: 'parse', intent, confidence, latency_ms }`. (3) Expense logged: `{ event: 'expense_logged', expenseId, amount, category }`. (4) Error: `{ event: 'error', error, context }`. Use `console.log(JSON.stringify(...))` — Railway captures stdout. Do not add a logging library.
   - Tests: none — verify in Railway log drain after deploy

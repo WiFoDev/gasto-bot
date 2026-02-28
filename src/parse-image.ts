@@ -52,6 +52,8 @@ export async function parseReceipt(
 
   const mediaType = detectMediaType(imageBuffer);
 
+  const startMs = Date.now();
+
   try {
     const response = await client.messages.create({
       model: 'claude-sonnet-4-5-20250929',
@@ -85,8 +87,27 @@ export async function parseReceipt(
 
     const raw = response.content[0].text;
     const jsonStr = extractJson(raw);
-    return JSON.parse(jsonStr) as ReceiptResult;
+    const parsed = JSON.parse(jsonStr) as ReceiptResult;
+
+    console.log(JSON.stringify({
+      event: 'parse',
+      type: 'receipt',
+      confidence: parsed.confidence,
+      latency_ms: Date.now() - startMs,
+      timestamp: new Date().toISOString(),
+    }));
+
+    return parsed;
   } catch (error) {
+    console.log(JSON.stringify({
+      event: 'parse',
+      type: 'receipt',
+      confidence: 0,
+      latency_ms: Date.now() - startMs,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    }));
+
     if (error instanceof SyntaxError) {
       return makeErrorResult();
     }
