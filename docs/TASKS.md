@@ -44,7 +44,7 @@ plus all test snapshots/assertions.
   - Update `webhook.test.ts` if it asserts on the fallback string
   - Depends on: TASK-31
 
-- [ ] TASK-33 (chore): Final verification pass
+- [x] TASK-33 (chore): Final verification pass
   - Run `npm run test` — all 265 tests must pass
   - Run `npx tsc --noEmit` — no type errors
   - Grep codebase for remaining English user-facing strings (exclude prompts, logs, types)
