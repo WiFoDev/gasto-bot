@@ -298,7 +298,7 @@ describe('webhook plugin', () => {
     expect(res.statusCode).toBe(200);
     expect(mockSendText).toHaveBeenCalledWith(
       expect.objectContaining({
-        body: 'Something went wrong, try again.',
+        body: 'Algo salió mal, intenta de nuevo.',
       }),
     );
   });
@@ -378,7 +378,7 @@ describe('webhook plugin', () => {
     expect(handler).not.toHaveBeenCalled();
     expect(mockSendText).toHaveBeenCalledWith(
       expect.objectContaining({
-        body: 'I can only process text and photos right now.',
+        body: 'Solo puedo procesar texto y fotos por ahora.',
       }),
     );
   });

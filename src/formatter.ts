@@ -24,7 +24,7 @@ export function formatCurrency(amount: number, currency: string): string {
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr + 'T00:00:00');
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return date.toLocaleDateString('es', { month: 'short', day: 'numeric' });
 }
 
 function truncate(text: string, max: number): string {
@@ -44,7 +44,7 @@ export function formatExpenseConfirmation(
   const detail: string[] = [];
   if (expense.description) {
     let desc = `"${truncate(expense.description, MAX_DESCRIPTION_LENGTH)}"`;
-    if (expense.merchant) desc += ` at ${expense.merchant}`;
+    if (expense.merchant) desc += ` en ${expense.merchant}`;
     detail.push(desc);
   } else if (expense.merchant) {
     detail.push(expense.merchant);
@@ -58,23 +58,23 @@ export function formatExpenseConfirmation(
 
 export function formatClarification(pending: PendingExpense): string {
   const amount = formatCurrency(pending.amount, pending.currency);
-  return `Got it — ${amount}. What was it for?`;
+  return `Listo — ${amount}. ¿En qué fue?`;
 }
 
 export function formatError(): string {
-  return 'Something went wrong, try again.';
+  return 'Algo salió mal, intenta de nuevo.';
 }
 
 export function formatUnknown(): string {
-  return "I didn't understand that. Try something like \"almuerzo 35 soles\" or send \"help\".";
+  return 'No entendí eso. Prueba algo como "almuerzo 35 soles" o envía "ayuda".';
 }
 
 export function formatParseError(): string {
-  return "I'm thinking too hard, try again.";
+  return 'Me trabé pensando, intenta de nuevo.';
 }
 
 export function formatDatabaseError(): string {
-  return "Couldn't save that, try again.";
+  return 'No pude guardar eso, intenta de nuevo.';
 }
 
 export function formatCorrection(
@@ -83,7 +83,7 @@ export function formatCorrection(
   newCategory: Category,
 ): string {
   const amount = formatCurrency(expense.amount, expense.currency);
-  return `✅ Updated: ${amount} — ${newCategory.icon} ${newCategory.name} (was: ${oldCategory.icon} ${oldCategory.name})`;
+  return `✅ Actualizado: ${amount} — ${newCategory.icon} ${newCategory.name} (era: ${oldCategory.icon} ${oldCategory.name})`;
 }
 
 export function formatAmountCorrection(
@@ -93,7 +93,7 @@ export function formatAmountCorrection(
 ): string {
   const newAmount = formatCurrency(expense.amount, expense.currency);
   const old = formatCurrency(oldAmount, expense.currency);
-  return `✅ Updated: ${newAmount} — ${category.icon} ${category.name} (was: ${old})`;
+  return `✅ Actualizado: ${newAmount} — ${category.icon} ${category.name} (era: ${old})`;
 }
 
 export function formatMerchantCorrection(
@@ -102,8 +102,8 @@ export function formatMerchantCorrection(
   oldMerchant: string | null,
 ): string {
   const amount = formatCurrency(expense.amount, expense.currency);
-  const oldLabel = oldMerchant ?? 'none';
-  return `✅ Updated: ${amount} — ${category.icon} ${category.name} · ${expense.merchant} (was: ${oldLabel})`;
+  const oldLabel = oldMerchant ?? 'ninguno';
+  return `✅ Actualizado: ${amount} — ${category.icon} ${category.name} · ${expense.merchant} (era: ${oldLabel})`;
 }
 
 export function formatCorrectionGeneric(
@@ -121,32 +121,32 @@ export function formatCorrectionGeneric(
     changes.push(`${formatCurrency(original.amount, updated.currency)} → ${amount}`);
   }
   if (updated.merchant !== original.merchant) {
-    changes.push(`${original.merchant ?? 'none'} → ${updated.merchant ?? 'none'}`);
+    changes.push(`${original.merchant ?? 'ninguno'} → ${updated.merchant ?? 'ninguno'}`);
   }
-  return `✅ Updated: ${amount} — ${newCategory.icon} ${newCategory.name} (was: ${changes.join(', ')})`;
+  return `✅ Actualizado: ${amount} — ${newCategory.icon} ${newCategory.name} (era: ${changes.join(', ')})`;
 }
 
 export function formatDeletion(expense: Expense, category: Category): string {
   const amount = formatCurrency(expense.amount, expense.currency);
   const date = formatDate(expense.date);
-  return `🗑️ Deleted: ${amount} — ${category.icon} ${category.name} · ${date}`;
+  return `🗑️ Eliminado: ${amount} — ${category.icon} ${category.name} · ${date}`;
 }
 
 export function formatNoExpenseToModify(): string {
-  return 'No recent expense to modify.';
+  return 'No hay gasto reciente para modificar.';
 }
 
 export function formatHelp(): string {
-  return `Here's what I can do:
+  return `Esto es lo que puedo hacer:
 
-📝 Log expense — "almuerzo 35 soles"
-📊 Summary — "how much this week?"
-💰 Set budget — "set food budget 800 monthly"
-✏️ Correct — "wrong, it's transport"
-🗑️ Delete — "delete that"
-🧾 Receipt — send a photo
+📝 Registrar gasto — "almuerzo 35 soles"
+📊 Resumen — "cuánto gasté esta semana?"
+💰 Presupuesto — "presupuesto comida 800 mensual"
+✏️ Corregir — "no, es transporte"
+🗑️ Borrar — "borra eso"
+🧾 Recibo — envía una foto
 
-Just type naturally, I'll figure it out!`;
+Escribe con naturalidad, yo me encargo.`;
 }
 
 export function formatBudgetConfirmation(
@@ -156,8 +156,9 @@ export function formatBudgetConfirmation(
   period: 'weekly' | 'monthly',
 ): string {
   const amountStr = formatCurrency(amount, currency);
-  const label = category ? `${category.icon} ${category.name}` : 'Overall';
-  return `💰 ${label} budget set to ${amountStr} ${period}`;
+  const label = category ? `${category.icon} ${category.name}` : 'General';
+  const periodLabel = period === 'weekly' ? 'semanal' : 'mensual';
+  return `💰 Presupuesto de ${label}: ${amountStr} ${periodLabel}`;
 }
 
 export function formatBudgetStatus(
@@ -166,21 +167,21 @@ export function formatBudgetStatus(
   spent: number,
   daysRemaining: number,
 ): string {
-  const label = category ? `${category.icon} ${category.name}` : '📊 Overall';
+  const label = category ? `${category.icon} ${category.name}` : '📊 General';
   const budgetAmount = formatCurrency(budget.amount, budget.currency);
   const spentAmount = formatCurrency(spent, budget.currency);
   const remaining = budget.amount - spent;
   const remainingAmount = formatCurrency(Math.max(remaining, 0), budget.currency);
   const percentage = budget.amount > 0 ? Math.round((spent / budget.amount) * 100) : 0;
-  const periodLabel = budget.period === 'weekly' ? 'week' : 'month';
+  const periodLabel = budget.period === 'weekly' ? 'semana' : 'mes';
 
-  let msg = `${label}\nSpent: ${spentAmount} / ${budgetAmount} (${percentage}%)\nRemaining: ${remainingAmount}`;
+  let msg = `${label}\nGastado: ${spentAmount} / ${budgetAmount} (${percentage}%)\nRestante: ${remainingAmount}`;
 
   if (remaining < 0) {
     const overAmount = formatCurrency(Math.abs(remaining), budget.currency);
-    msg += `\n🚨 Over budget by ${overAmount}!`;
+    msg += `\n🚨 Excediste por ${overAmount}!`;
   } else if (percentage >= 80) {
-    msg += `\n⚠️ ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} left in ${periodLabel}`;
+    msg += `\n⚠️ ${daysRemaining} día${daysRemaining !== 1 ? 's' : ''} restante${daysRemaining !== 1 ? 's' : ''} en el ${periodLabel}`;
   }
   return msg;
 }
@@ -195,11 +196,11 @@ function formatPeriodHeader(
 
   switch (period) {
     case 'today':
-      return `Today (${start})`;
+      return `Hoy (${start})`;
     case 'week':
-      return startDate === endDate ? `This Week (${start})` : `This Week (${start}–${end})`;
+      return startDate === endDate ? `Esta semana (${start})` : `Esta semana (${start}–${end})`;
     case 'month':
-      return startDate === endDate ? `This Month (${start})` : `This Month (${start}–${end})`;
+      return startDate === endDate ? `Este mes (${start})` : `Este mes (${start}–${end})`;
   }
 }
 
@@ -214,7 +215,7 @@ export function formatSummary(
   let msg = `📊 ${header}\nTotal: ${total}`;
 
   if (summary.byCategory.length === 0) {
-    msg += '\n\nNo expenses recorded.';
+    msg += '\n\nSin gastos registrados.';
     return msg;
   }
 
@@ -232,29 +233,29 @@ export function formatReceiptConfirmation(
   category: Category,
 ): string {
   const amount = formatCurrency(pending.amount, pending.currency);
-  let msg = `🧾 ${pending.merchant ?? 'Receipt'} — ${amount}`;
-  msg += `\nCategory: ${category.icon} ${category.name} · ${formatDate(pending.date)}`;
-  msg += '\nLook right?';
+  let msg = `🧾 ${pending.merchant ?? 'Recibo'} — ${amount}`;
+  msg += `\nCategoría: ${category.icon} ${category.name} · ${formatDate(pending.date)}`;
+  msg += '\n¿Está bien?';
   return msg;
 }
 
 export function formatReceiptUnclear(): string {
-  return "Couldn't read that clearly. What was the total and where was it from?";
+  return 'No pude leer eso bien. ¿Cuál fue el total y de dónde fue?';
 }
 
 export function formatNoBudget(category: Category | null): string {
-  const label = category ? `${category.icon} ${category.name}` : 'overall';
-  return `No budget set for ${label}. Try "set ${category?.slug ?? ''} budget 500 monthly"`;
+  const label = category ? `${category.icon} ${category.name}` : 'general';
+  return `No hay presupuesto para ${label}. Prueba "presupuesto ${category?.slug ?? ''} 500 mensual"`;
 }
 
 export function formatExpenseCancelled(): string {
-  return 'Got it, cancelled.';
+  return 'Listo, cancelado.';
 }
 
 export function formatUnknownUser(): string {
-  return 'This is a personal bot.';
+  return 'Este es un bot personal.';
 }
 
 export function formatUnsupportedMedia(): string {
-  return 'I can only process text and photos right now.';
+  return 'Solo puedo procesar texto y fotos por ahora.';
 }

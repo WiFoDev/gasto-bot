@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { WhatsAppClient } from '@kapso/whatsapp-cloud-api';
 import { KAPSO_API_KEY, KAPSO_WEBHOOK_SECRET } from './config.js';
-import { formatUnsupportedMedia } from './formatter.js';
+import { formatError, formatUnsupportedMedia } from './formatter.js';
 import type { KapsoWebhookPayload, MessageHandler } from './types.js';
 
 // ── Deduplication ───────────────────────────────────────────────
@@ -203,7 +203,7 @@ const webhookPlugin: FastifyPluginAsync<WebhookPluginOptions> = async (
           timestamp: new Date().toISOString(),
         }),
       );
-      responseText = 'Something went wrong, try again.';
+      responseText = formatError();
     }
 
     // Send reply via Kapso

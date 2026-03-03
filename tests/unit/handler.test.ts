@@ -272,7 +272,7 @@ describe('handleMessage', () => {
       const result = await handleMessage(PHONE, 'text', 'hello');
 
       expect(result).toBe(formatUnknownUser());
-      expect(result).toBe('This is a personal bot.');
+      expect(result).toBe('Este es un bot personal.');
       expect(mockedParseMessage).not.toHaveBeenCalled();
     });
   });
@@ -297,7 +297,7 @@ describe('handleMessage', () => {
       expect(result).toContain('🧾');
       expect(result).toContain('Plaza Vea');
       expect(result).toContain('S/127.50');
-      expect(result).toContain('Look right?');
+      expect(result).toContain('¿Está bien?');
       expect(mockedInsertExpense).not.toHaveBeenCalled();
     });
 
@@ -547,7 +547,7 @@ describe('handleMessage', () => {
       const result = await handleMessage(PHONE, 'image', IMAGE_URL);
 
       expect(result).toContain('🧾');
-      expect(result).toContain('Look right?');
+      expect(result).toContain('¿Está bien?');
     });
   });
 
@@ -608,7 +608,7 @@ describe('handleMessage', () => {
       const result = await handleMessage(PHONE, 'text', 'something 50');
 
       expect(mockedInsertExpense).not.toHaveBeenCalled();
-      expect(result).toContain('What was it for?');
+      expect(result).toContain('¿En qué fue?');
     });
 
     it('defaults to "other" when slug is not found', async () => {
@@ -990,7 +990,7 @@ describe('handleMessage', () => {
       const result = await handleMessage(PHONE, 'text', 'help');
 
       expect(mockedParseMessage).toHaveBeenCalledOnce();
-      expect(result).toContain('Here');
+      expect(result).toContain('puedo hacer');
     });
   });
 
@@ -1097,9 +1097,9 @@ describe('handleMessage', () => {
 
       const result = await handleMessage(PHONE, 'text', 'wrong, it was transport');
 
-      expect(result).toContain('Updated');
+      expect(result).toContain('Actualizado');
       expect(result).toContain('Transport');
-      expect(result).toContain('was:');
+      expect(result).toContain('era:');
       expect(result).toContain('Food & Dining');
       expect(mockedUpdateExpense).toHaveBeenCalledWith('exp-1', { category_id: 'cat-transport' });
     });
@@ -1125,9 +1125,9 @@ describe('handleMessage', () => {
 
       const result = await handleMessage(PHONE, 'text', 'no era 40');
 
-      expect(result).toContain('Updated');
+      expect(result).toContain('Actualizado');
       expect(result).toContain('S/40.00');
-      expect(result).toContain('was:');
+      expect(result).toContain('era:');
       expect(result).toContain('S/35.00');
       expect(mockedUpdateExpense).toHaveBeenCalledWith('exp-1', { amount: 40 });
     });
@@ -1147,7 +1147,7 @@ describe('handleMessage', () => {
 
       const result = await handleMessage(PHONE, 'text', 'wrong, it was transport');
 
-      expect(result).toContain('Updated');
+      expect(result).toContain('Actualizado');
       expect(mockedGetLastExpense).toHaveBeenCalledWith('user-1');
       expect(mockedUpdateExpense).toHaveBeenCalledWith('exp-last', { category_id: 'cat-transport' });
     });
@@ -1220,9 +1220,9 @@ describe('handleMessage', () => {
 
       const result = await handleMessage(PHONE, 'text', 'es de Wong');
 
-      expect(result).toContain('Updated');
+      expect(result).toContain('Actualizado');
       expect(result).toContain('Wong');
-      expect(result).toContain('was: CENCOSUD');
+      expect(result).toContain('era: CENCOSUD');
       expect(mockedUpdateExpense).toHaveBeenCalledWith('exp-1', { merchant: 'Wong' });
     });
 
@@ -1249,7 +1249,7 @@ describe('handleMessage', () => {
 
       const result = await handleMessage(PHONE, 'text', 'no, it was Wong, groceries');
 
-      expect(result).toContain('Updated');
+      expect(result).toContain('Actualizado');
       expect(result).toContain('Groceries');
       expect(mockedUpdateExpense).toHaveBeenCalledWith('exp-1', {
         merchant: 'Wong',
@@ -1275,7 +1275,7 @@ describe('handleMessage', () => {
 
       const result = await handleMessage(PHONE, 'text', 'delete that');
 
-      expect(result).toContain('Deleted');
+      expect(result).toContain('Eliminado');
       expect(result).toContain('S/35.00');
       expect(result).toContain('Food & Dining');
       expect(mockedSoftDeleteExpense).toHaveBeenCalledWith('exp-1');
@@ -1351,7 +1351,7 @@ describe('handleMessage', () => {
 
       const result = await handleMessage(PHONE, 'text', 'borra eso');
 
-      expect(result).toContain('Deleted');
+      expect(result).toContain('Eliminado');
       expect(mockedGetLastExpense).toHaveBeenCalledWith('user-1');
       expect(mockedSoftDeleteExpense).toHaveBeenCalledWith('exp-last');
     });
@@ -1395,7 +1395,7 @@ describe('handleMessage', () => {
 
       const result = await handleMessage(PHONE, 'text', 'what did I spend today?');
 
-      expect(result).toContain('No expenses recorded.');
+      expect(result).toContain('Sin gastos registrados.');
     });
   });
 
@@ -1417,7 +1417,7 @@ describe('handleMessage', () => {
       expect(result).toContain('💰');
       expect(result).toContain('Food & Dining');
       expect(result).toContain('S/800.00');
-      expect(result).toContain('monthly');
+      expect(result).toContain('mensual');
       expect(mockedUpsertBudget).toHaveBeenCalledWith(
         'user-1',
         'cat-food',
@@ -1441,7 +1441,7 @@ describe('handleMessage', () => {
 
       const result = await handleMessage(PHONE, 'text', 'transport budget 200 weekly');
 
-      expect(result).toContain('weekly');
+      expect(result).toContain('semanal');
       expect(mockedUpsertBudget).toHaveBeenCalledWith(
         'user-1',
         'cat-transport',
@@ -1465,7 +1465,7 @@ describe('handleMessage', () => {
 
       const result = await handleMessage(PHONE, 'text', 'budget comida 500');
 
-      expect(result).toContain('monthly');
+      expect(result).toContain('mensual');
       expect(mockedUpsertBudget).toHaveBeenCalledWith(
         expect.any(String),
         expect.any(String),
@@ -1545,7 +1545,7 @@ describe('handleMessage', () => {
 
       const result = await handleMessage(PHONE, 'text', 'set budget 2000');
 
-      expect(result).toContain('Overall');
+      expect(result).toContain('General');
       expect(mockedUpsertBudget).toHaveBeenCalledWith(
         'user-1',
         null,
@@ -1589,7 +1589,7 @@ describe('handleMessage', () => {
 
       const result = await handleMessage(PHONE, 'text', "how's my food budget?");
 
-      expect(result).toContain('No budget set');
+      expect(result).toContain('No hay presupuesto');
       expect(result).toContain('Food & Dining');
     });
 
@@ -1623,7 +1623,7 @@ describe('handleMessage', () => {
       const result = await handleMessage(PHONE, 'text', 'food budget');
 
       expect(result).toContain('🚨');
-      expect(result).toContain('Over budget');
+      expect(result).toContain('Excediste por');
     });
 
     it('queries without category (overall)', async () => {
@@ -1638,8 +1638,8 @@ describe('handleMessage', () => {
 
       const result = await handleMessage(PHONE, 'text', 'budget status');
 
-      expect(result).toContain('No budget set');
-      expect(result).toContain('overall');
+      expect(result).toContain('No hay presupuesto');
+      expect(result).toContain('general');
     });
 
     it('tries weekly budget when monthly not found', async () => {

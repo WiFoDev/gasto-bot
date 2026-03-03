@@ -110,7 +110,7 @@ describe('formatExpenseConfirmation', () => {
     expect(result).toContain('S/35.00');
     expect(result).toContain('Food & Dining');
     expect(result).toContain('almuerzo');
-    expect(result).toContain('Feb 25');
+    expect(result).toContain('25 feb');
   });
 
   it('formats expense with merchant', () => {
@@ -170,7 +170,7 @@ describe('formatExpenseConfirmation', () => {
     const result = formatExpenseConfirmation(makeExpense(), makeCategory());
     expect(result).toMatchInlineSnapshot(
       `"✅ S/35.00 — 🍽 Food & Dining
-"almuerzo" · Feb 25"`,
+"almuerzo" · 25 feb"`,
     );
   });
 
@@ -181,7 +181,7 @@ describe('formatExpenseConfirmation', () => {
     );
     expect(result).toMatchInlineSnapshot(
       `"✅ S/35.00 — 🛒 Groceries
-"groceries" at Wong · Feb 25"`,
+"groceries" en Wong · 25 feb"`,
     );
   });
 
@@ -192,7 +192,7 @@ describe('formatExpenseConfirmation', () => {
     );
     expect(result).toMatchInlineSnapshot(
       `"✅ S/35.00 — 🍽 Food & Dining
-Feb 25"`,
+25 feb"`,
     );
   });
 });
@@ -216,7 +216,7 @@ describe('formatClarification', () => {
   it('snapshot: standard clarification', () => {
     const result = formatClarification(makePendingExpense());
     expect(result).toMatchInlineSnapshot(
-      `"Got it — S/50.00. What was it for?"`,
+      `"Listo — S/50.00. ¿En qué fue?"`,
     );
   });
 });
@@ -229,10 +229,10 @@ describe('formatCorrection', () => {
     const oldCat = makeCategory({ name: 'Food & Dining', icon: '🍽' });
     const newCat = makeCategory({ name: 'Transport', icon: '🚗', slug: 'transport' });
     const result = formatCorrection(expense, oldCat, newCat);
-    expect(result).toContain('Updated');
+    expect(result).toContain('Actualizado');
     expect(result).toContain('S/12.50');
     expect(result).toContain('Transport');
-    expect(result).toContain('was:');
+    expect(result).toContain('era:');
     expect(result).toContain('Food & Dining');
   });
 
@@ -241,7 +241,7 @@ describe('formatCorrection', () => {
     const oldCat = makeCategory({ name: 'Food & Dining', icon: '🍽' });
     const newCat = makeCategory({ name: 'Transport', icon: '🚗' });
     expect(formatCorrection(expense, oldCat, newCat)).toMatchInlineSnapshot(
-      `"✅ Updated: S/12.50 — 🚗 Transport (was: 🍽 Food & Dining)"`,
+      `"✅ Actualizado: S/12.50 — 🚗 Transport (era: 🍽 Food & Dining)"`,
     );
   });
 });
@@ -253,9 +253,9 @@ describe('formatAmountCorrection', () => {
     const expense = makeExpense({ amount: 40 });
     const cat = makeCategory();
     const result = formatAmountCorrection(expense, cat, 35);
-    expect(result).toContain('Updated');
+    expect(result).toContain('Actualizado');
     expect(result).toContain('S/40.00');
-    expect(result).toContain('was:');
+    expect(result).toContain('era:');
     expect(result).toContain('S/35.00');
   });
 
@@ -263,7 +263,7 @@ describe('formatAmountCorrection', () => {
     const expense = makeExpense({ amount: 40 });
     const cat = makeCategory();
     expect(formatAmountCorrection(expense, cat, 35)).toMatchInlineSnapshot(
-      `"✅ Updated: S/40.00 — 🍽 Food & Dining (was: S/35.00)"`,
+      `"✅ Actualizado: S/40.00 — 🍽 Food & Dining (era: S/35.00)"`,
     );
   });
 });
@@ -276,17 +276,17 @@ describe('formatDeletion', () => {
     const cat = makeCategory({ name: 'Transport', icon: '🚗' });
     const result = formatDeletion(expense, cat);
     expect(result).toContain('🗑️');
-    expect(result).toContain('Deleted');
+    expect(result).toContain('Eliminado');
     expect(result).toContain('S/12.50');
     expect(result).toContain('Transport');
-    expect(result).toContain('Feb 25');
+    expect(result).toContain('25 feb');
   });
 
   it('snapshot: standard deletion', () => {
     const expense = makeExpense({ amount: 12.5, date: '2026-02-25' });
     const cat = makeCategory({ name: 'Transport', icon: '🚗' });
     expect(formatDeletion(expense, cat)).toMatchInlineSnapshot(
-      `"🗑️ Deleted: S/12.50 — 🚗 Transport · Feb 25"`,
+      `"🗑️ Eliminado: S/12.50 — 🚗 Transport · 25 feb"`,
     );
   });
 });
@@ -302,7 +302,7 @@ describe('formatNoExpenseToModify', () => {
 
   it('snapshot', () => {
     expect(formatNoExpenseToModify()).toMatchInlineSnapshot(
-      `"No recent expense to modify."`,
+      `"No hay gasto reciente para modificar."`,
     );
   });
 });
@@ -318,12 +318,12 @@ describe('formatError', () => {
 
   it('does not contain technical details', () => {
     const result = formatError();
-    expect(result).not.toMatch(/error|exception|stack|undefined/i);
+    expect(result).not.toMatch(/exception|stack|undefined/i);
   });
 
   it('snapshot', () => {
     expect(formatError()).toMatchInlineSnapshot(
-      `"Something went wrong, try again."`,
+      `"Algo salió mal, intenta de nuevo."`,
     );
   });
 });
@@ -334,12 +334,12 @@ describe('formatUnknown', () => {
   it('returns a helpful message with example', () => {
     const result = formatUnknown();
     expect(result).toContain('almuerzo 35 soles');
-    expect(result).toContain('help');
+    expect(result).toContain('ayuda');
   });
 
   it('snapshot', () => {
     expect(formatUnknown()).toMatchInlineSnapshot(
-      `"I didn't understand that. Try something like "almuerzo 35 soles" or send "help"."`,
+      `"No entendí eso. Prueba algo como "almuerzo 35 soles" o envía "ayuda"."`,
     );
   });
 });
@@ -355,12 +355,12 @@ describe('formatParseError', () => {
 
   it('does not contain technical details', () => {
     const result = formatParseError();
-    expect(result).not.toMatch(/error|exception|stack|timeout|api/i);
+    expect(result).not.toMatch(/exception|stack|timeout|api/i);
   });
 
   it('snapshot', () => {
     expect(formatParseError()).toMatchInlineSnapshot(
-      `"I'm thinking too hard, try again."`,
+      `"Me trabé pensando, intenta de nuevo."`,
     );
   });
 });
@@ -376,12 +376,12 @@ describe('formatDatabaseError', () => {
 
   it('does not contain technical details', () => {
     const result = formatDatabaseError();
-    expect(result).not.toMatch(/error|exception|stack|database|sql|supabase/i);
+    expect(result).not.toMatch(/exception|stack|database|sql|supabase/i);
   });
 
   it('snapshot', () => {
     expect(formatDatabaseError()).toMatchInlineSnapshot(
-      `"Couldn't save that, try again."`,
+      `"No pude guardar eso, intenta de nuevo."`,
     );
   });
 });
@@ -397,27 +397,27 @@ describe('formatHelp', () => {
 
   it('includes logging instructions', () => {
     const result = formatHelp();
-    expect(result).toMatch(/almuerzo 35|log/i);
+    expect(result).toMatch(/almuerzo 35/i);
   });
 
   it('includes summary instructions', () => {
     const result = formatHelp();
-    expect(result).toMatch(/week|month|summary/i);
+    expect(result).toMatch(/semana|mes|resumen/i);
   });
 
   it('includes budget instructions', () => {
     const result = formatHelp();
-    expect(result).toMatch(/budget/i);
+    expect(result).toMatch(/presupuesto/i);
   });
 
   it('includes correction instructions', () => {
     const result = formatHelp();
-    expect(result).toMatch(/correct|wrong/i);
+    expect(result).toMatch(/corregir|no,/i);
   });
 
   it('includes deletion instructions', () => {
     const result = formatHelp();
-    expect(result).toMatch(/delete|borrar/i);
+    expect(result).toMatch(/borrar|borra/i);
   });
 
   it('does not use markdown formatting', () => {
@@ -429,16 +429,16 @@ describe('formatHelp', () => {
 
   it('snapshot', () => {
     expect(formatHelp()).toMatchInlineSnapshot(`
-      "Here's what I can do:
+      "Esto es lo que puedo hacer:
 
-      📝 Log expense — "almuerzo 35 soles"
-      📊 Summary — "how much this week?"
-      💰 Set budget — "set food budget 800 monthly"
-      ✏️ Correct — "wrong, it's transport"
-      🗑️ Delete — "delete that"
-      🧾 Receipt — send a photo
+      📝 Registrar gasto — "almuerzo 35 soles"
+      📊 Resumen — "cuánto gasté esta semana?"
+      💰 Presupuesto — "presupuesto comida 800 mensual"
+      ✏️ Corregir — "no, es transporte"
+      🗑️ Borrar — "borra eso"
+      🧾 Recibo — envía una foto
 
-      Just type naturally, I'll figure it out!"
+      Escribe con naturalidad, yo me encargo."
     `);
   });
 });
@@ -483,18 +483,18 @@ describe('formatBudgetConfirmation', () => {
     expect(result).toContain('💰');
     expect(result).toContain('Food & Dining');
     expect(result).toContain('S/800.00');
-    expect(result).toContain('monthly');
+    expect(result).toContain('mensual');
   });
 
   it('formats confirmation without category (overall)', () => {
     const result = formatBudgetConfirmation(null, 2000, 'PEN', 'monthly');
-    expect(result).toContain('Overall');
+    expect(result).toContain('General');
     expect(result).toContain('S/2,000.00');
   });
 
   it('formats weekly budget', () => {
     const result = formatBudgetConfirmation(makeCategory(), 200, 'PEN', 'weekly');
-    expect(result).toContain('weekly');
+    expect(result).toContain('semanal');
   });
 
   it('formats USD budget', () => {
@@ -504,12 +504,12 @@ describe('formatBudgetConfirmation', () => {
 
   it('snapshot: category monthly', () => {
     expect(formatBudgetConfirmation(makeCategory(), 800, 'PEN', 'monthly'))
-      .toMatchInlineSnapshot(`"💰 🍽 Food & Dining budget set to S/800.00 monthly"`);
+      .toMatchInlineSnapshot(`"💰 Presupuesto de 🍽 Food & Dining: S/800.00 mensual"`);
   });
 
   it('snapshot: overall monthly', () => {
     expect(formatBudgetConfirmation(null, 2000, 'PEN', 'monthly'))
-      .toMatchInlineSnapshot(`"💰 Overall budget set to S/2,000.00 monthly"`);
+      .toMatchInlineSnapshot(`"💰 Presupuesto de General: S/2,000.00 mensual"`);
   });
 });
 
@@ -531,27 +531,27 @@ describe('formatBudgetStatus', () => {
     const result = formatBudgetStatus(makeCategory(), makeBudget(), 640, 5);
     expect(result).toContain('80%');
     expect(result).toContain('⚠️');
-    expect(result).toContain('5 days left in month');
+    expect(result).toContain('5 días restantes en el mes');
   });
 
   it('shows warning at 90% usage', () => {
     const result = formatBudgetStatus(makeCategory(), makeBudget(), 720, 3);
     expect(result).toContain('90%');
     expect(result).toContain('⚠️');
-    expect(result).toContain('3 days');
+    expect(result).toContain('3 días');
   });
 
   it('shows over budget alert at 100%+', () => {
     const result = formatBudgetStatus(makeCategory(), makeBudget(), 900, 2);
     expect(result).toContain('🚨');
-    expect(result).toContain('Over budget');
+    expect(result).toContain('Excediste por');
     expect(result).toContain('S/100.00');
   });
 
-  it('uses singular "day" when 1 day remaining', () => {
+  it('uses singular "día" when 1 day remaining', () => {
     const result = formatBudgetStatus(makeCategory(), makeBudget(), 680, 1);
-    expect(result).toContain('1 day left');
-    expect(result).not.toContain('1 days');
+    expect(result).toContain('1 día restante');
+    expect(result).not.toContain('1 días');
   });
 
   it('formats weekly period label', () => {
@@ -561,20 +561,20 @@ describe('formatBudgetStatus', () => {
       180,
       2,
     );
-    expect(result).toContain('week');
+    expect(result).toContain('semana');
   });
 
   it('formats without category (overall)', () => {
     const result = formatBudgetStatus(null, makeBudget(), 400, 15);
-    expect(result).toContain('📊 Overall');
+    expect(result).toContain('📊 General');
   });
 
   it('snapshot: 50% usage', () => {
     expect(formatBudgetStatus(makeCategory(), makeBudget(), 400, 15))
       .toMatchInlineSnapshot(`
       "🍽 Food & Dining
-      Spent: S/400.00 / S/800.00 (50%)
-      Remaining: S/400.00"
+      Gastado: S/400.00 / S/800.00 (50%)
+      Restante: S/400.00"
     `);
   });
 
@@ -582,9 +582,9 @@ describe('formatBudgetStatus', () => {
     expect(formatBudgetStatus(makeCategory(), makeBudget(), 680, 5))
       .toMatchInlineSnapshot(`
       "🍽 Food & Dining
-      Spent: S/680.00 / S/800.00 (85%)
-      Remaining: S/120.00
-      ⚠️ 5 days left in month"
+      Gastado: S/680.00 / S/800.00 (85%)
+      Restante: S/120.00
+      ⚠️ 5 días restantes en el mes"
     `);
   });
 
@@ -592,9 +592,9 @@ describe('formatBudgetStatus', () => {
     expect(formatBudgetStatus(makeCategory(), makeBudget(), 950, 2))
       .toMatchInlineSnapshot(`
       "🍽 Food & Dining
-      Spent: S/950.00 / S/800.00 (119%)
-      Remaining: S/0.00
-      🚨 Over budget by S/150.00!"
+      Gastado: S/950.00 / S/800.00 (119%)
+      Restante: S/0.00
+      🚨 Excediste por S/150.00!"
     `);
   });
 });
@@ -605,13 +605,13 @@ describe('formatNoBudget', () => {
   it('formats with category', () => {
     const result = formatNoBudget(makeCategory());
     expect(result).toContain('Food & Dining');
-    expect(result).toContain('No budget set');
+    expect(result).toContain('No hay presupuesto');
   });
 
   it('formats without category', () => {
     const result = formatNoBudget(null);
-    expect(result).toContain('overall');
-    expect(result).toContain('No budget set');
+    expect(result).toContain('general');
+    expect(result).toContain('No hay presupuesto');
   });
 });
 
@@ -619,9 +619,9 @@ describe('formatSummary', () => {
   it('includes period header with date range', () => {
     const result = formatSummary(makeSummary(), 'week', 'PEN');
     expect(result).toContain('📊');
-    expect(result).toContain('This Week');
-    expect(result).toContain('Feb 19');
-    expect(result).toContain('Feb 25');
+    expect(result).toContain('Esta semana');
+    expect(result).toContain('19 feb');
+    expect(result).toContain('25 feb');
   });
 
   it('includes total amount', () => {
@@ -646,13 +646,13 @@ describe('formatSummary', () => {
     expect(result).toContain('S/87.50');
   });
 
-  it('shows "No expenses recorded." for empty period', () => {
+  it('shows "Sin gastos registrados." for empty period', () => {
     const result = formatSummary(
       makeSummary({ total: 0, byCategory: [] }),
       'week',
       'PEN',
     );
-    expect(result).toContain('No expenses recorded.');
+    expect(result).toContain('Sin gastos registrados.');
     expect(result).toContain('S/0.00');
   });
 
@@ -662,8 +662,8 @@ describe('formatSummary', () => {
       'today',
       'PEN',
     );
-    expect(result).toContain('Today');
-    expect(result).toContain('Feb 25');
+    expect(result).toContain('Hoy');
+    expect(result).toContain('25 feb');
   });
 
   it('formats month period correctly', () => {
@@ -672,9 +672,9 @@ describe('formatSummary', () => {
       'month',
       'PEN',
     );
-    expect(result).toContain('This Month');
-    expect(result).toContain('Feb 1');
-    expect(result).toContain('Feb 25');
+    expect(result).toContain('Este mes');
+    expect(result).toContain('1 feb');
+    expect(result).toContain('25 feb');
   });
 
   it('formats USD currency', () => {
@@ -684,7 +684,7 @@ describe('formatSummary', () => {
 
   it('snapshot: week summary', () => {
     expect(formatSummary(makeSummary(), 'week', 'PEN')).toMatchInlineSnapshot(`
-      "📊 This Week (Feb 19–Feb 25)
+      "📊 Esta semana (19 feb–25 feb)
       Total: S/342.50
 
       🍽 Food & Dining  S/185.00
@@ -701,10 +701,10 @@ describe('formatSummary', () => {
         'PEN',
       ),
     ).toMatchInlineSnapshot(`
-      "📊 Today (Feb 25)
+      "📊 Hoy (25 feb)
       Total: S/0.00
 
-      No expenses recorded."
+      Sin gastos registrados."
     `);
   });
 
@@ -721,7 +721,7 @@ describe('formatSummary', () => {
         'PEN',
       ),
     ).toMatchInlineSnapshot(`
-      "📊 This Month (Feb 1–Feb 25)
+      "📊 Este mes (1 feb–25 feb)
       Total: S/250.00
 
       🍽 Food & Dining  S/250.00"
@@ -741,15 +741,15 @@ describe('formatReceiptConfirmation', () => {
     expect(result).toContain('Plaza Vea');
     expect(result).toContain('S/127.50');
     expect(result).toContain('Groceries');
-    expect(result).toContain('Look right?');
+    expect(result).toContain('¿Está bien?');
   });
 
-  it('shows "Receipt" when merchant is null', () => {
+  it('shows "Recibo" when merchant is null', () => {
     const result = formatReceiptConfirmation(
       makePendingExpense({ amount: 50, merchant: null, source: 'image' }),
       makeCategory(),
     );
-    expect(result).toContain('Receipt');
+    expect(result).toContain('Recibo');
     expect(result).toContain('S/50.00');
   });
 
@@ -758,7 +758,7 @@ describe('formatReceiptConfirmation', () => {
       makePendingExpense({ amount: 35, merchant: 'Wong', date: '2026-02-25' }),
       makeCategory(),
     );
-    expect(result).toContain('Feb 25');
+    expect(result).toContain('25 feb');
   });
 
   it('snapshot: receipt with merchant', () => {
@@ -769,8 +769,8 @@ describe('formatReceiptConfirmation', () => {
       ),
     ).toMatchInlineSnapshot(`
       "🧾 Plaza Vea — S/127.50
-      Category: 🛒 Groceries · Feb 25
-      Look right?"
+      Categoría: 🛒 Groceries · 25 feb
+      ¿Está bien?"
     `);
   });
 
@@ -781,9 +781,9 @@ describe('formatReceiptConfirmation', () => {
         makeCategory(),
       ),
     ).toMatchInlineSnapshot(`
-      "🧾 Receipt — S/45.00
-      Category: 🍽 Food & Dining · Feb 25
-      Look right?"
+      "🧾 Recibo — S/45.00
+      Categoría: 🍽 Food & Dining · 25 feb
+      ¿Está bien?"
     `);
   });
 });
@@ -799,7 +799,7 @@ describe('formatReceiptUnclear', () => {
 
   it('snapshot', () => {
     expect(formatReceiptUnclear()).toMatchInlineSnapshot(
-      `"Couldn't read that clearly. What was the total and where was it from?"`,
+      `"No pude leer eso bien. ¿Cuál fue el total y de dónde fue?"`,
     );
   });
 });
@@ -808,7 +808,7 @@ describe('formatReceiptUnclear', () => {
 
 describe('formatUnknownUser', () => {
   it('returns personal bot message', () => {
-    expect(formatUnknownUser()).toBe('This is a personal bot.');
+    expect(formatUnknownUser()).toBe('Este es un bot personal.');
   });
 });
 
@@ -817,7 +817,7 @@ describe('formatUnknownUser', () => {
 describe('formatUnsupportedMedia', () => {
   it('returns unsupported media message', () => {
     expect(formatUnsupportedMedia()).toBe(
-      'I can only process text and photos right now.',
+      'Solo puedo procesar texto y fotos por ahora.',
     );
   });
 });
@@ -829,23 +829,23 @@ describe('formatMerchantCorrection', () => {
     const expense = makeExpense({ amount: 95.6, merchant: 'Wong' });
     const cat = makeCategory({ name: 'Other', icon: '📦', slug: 'other' });
     const result = formatMerchantCorrection(expense, cat, 'CENCOSUD');
-    expect(result).toContain('Updated');
+    expect(result).toContain('Actualizado');
     expect(result).toContain('Wong');
-    expect(result).toContain('was: CENCOSUD');
+    expect(result).toContain('era: CENCOSUD');
   });
 
-  it('shows "none" when old merchant was null', () => {
+  it('shows "ninguno" when old merchant was null', () => {
     const expense = makeExpense({ merchant: 'Wong' });
     const cat = makeCategory();
     const result = formatMerchantCorrection(expense, cat, null);
-    expect(result).toContain('was: none');
+    expect(result).toContain('era: ninguno');
   });
 
   it('snapshot: merchant correction', () => {
     const expense = makeExpense({ amount: 95.6, merchant: 'Wong' });
     const cat = makeCategory({ name: 'Other', icon: '📦' });
     expect(formatMerchantCorrection(expense, cat, 'CENCOSUD')).toMatchInlineSnapshot(
-      `"✅ Updated: S/95.60 — 📦 Other · Wong (was: CENCOSUD)"`,
+      `"✅ Actualizado: S/95.60 — 📦 Other · Wong (era: CENCOSUD)"`,
     );
   });
 });
@@ -859,7 +859,7 @@ describe('formatCorrectionGeneric', () => {
     const oldCat = makeCategory({ id: 'cat-other', name: 'Other', icon: '📦', slug: 'other' });
     const newCat = makeCategory({ id: 'cat-groceries', name: 'Groceries', icon: '🛒', slug: 'groceries' });
     const result = formatCorrectionGeneric(updated, original, oldCat, newCat);
-    expect(result).toContain('Updated');
+    expect(result).toContain('Actualizado');
     expect(result).toContain('Groceries');
     expect(result).toContain('Other');
     expect(result).toContain('CENCOSUD');
@@ -872,7 +872,7 @@ describe('formatCorrectionGeneric', () => {
     const oldCat = makeCategory({ id: 'cat-other', name: 'Other', icon: '📦', slug: 'other' });
     const newCat = makeCategory({ id: 'cat-groceries', name: 'Groceries', icon: '🛒', slug: 'groceries' });
     expect(formatCorrectionGeneric(updated, original, oldCat, newCat)).toMatchInlineSnapshot(
-      `"✅ Updated: S/95.60 — 🛒 Groceries (was: 📦 Other → 🛒 Groceries, CENCOSUD → Wong)"`,
+      `"✅ Actualizado: S/95.60 — 🛒 Groceries (era: 📦 Other → 🛒 Groceries, CENCOSUD → Wong)"`,
     );
   });
 });

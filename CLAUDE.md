@@ -38,7 +38,7 @@
 - `src/handler.ts` — core orchestrator: state check → parse → route intent → respond
 - `src/parse.ts` — single Claude Sonnet call per message (intent + extract + categorize)
 - `src/parse-image.ts` — Claude Vision call for receipts
-- `src/db.ts` — Supabase client + 16 query functions
+- `src/db.ts` — Supabase client + 14 query functions
 - `src/storage.ts` — download from Kapso → upload to Supabase Storage
 - `src/state.ts` — conversation state Map keyed by phone number
 - `src/formatter.ts` — WhatsApp-optimized response strings
@@ -46,7 +46,7 @@
 - `seed.sql` — default user + 9 categories
 
 ## Testing (CRITICAL)
-- **Unit** (`tests/unit/`, 10 files, 264 tests): Mock external deps via hoisted `vi.mock()`. Test orchestration logic, not library wrappers. Uses inline snapshots for formatter output.
+- **Unit** (`tests/unit/`, 10 files, 265 tests): Mock external deps via hoisted `vi.mock()`. Test orchestration logic, not library wrappers. Uses inline snapshots for formatter output.
 - **Integration** (`tests/integration/`, 5 files): Real Claude + Supabase API calls. Excluded from `npm run test` by vitest config. Run manually with `npm run test:integration`.
 - **Validation gates**: Text parse ≥ 85% accuracy (GATE #1, currently 100%). Receipt parse ≥ 70% accuracy (GATE #2).
 - **E2E**: Manual WhatsApp testing on real phone. No automated E2E framework.
@@ -59,7 +59,7 @@
 3. Write/update tests FIRST, then implement, then verify with `npm run test`.
 4. Respect `⚡ CRITICAL PATH` and `🚧 GATE` markers — gates block downstream tasks.
 5. Commit after each completed task.
-6. Commit format: `feat(TASK-XX): short description`
+6. Commit format: `feat(TASK-XX): short description` or `fix: description`
 7. Branch naming: `feat/task-XX-short-name`
 8. Mark task complete in `TASKS.md` after commit: `- [x] TASK-XX`
 9. If a gate fails, iterate on the blocking task until it passes. Do NOT proceed.
