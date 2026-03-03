@@ -37,7 +37,7 @@ plus all test snapshots/assertions.
     - "This is a personal bot." → "Este es un bot personal."
     - "I can only process text and photos right now." → "Solo puedo procesar texto y fotos por ahora."
 
-- [ ] TASK-32 (feature): Translate `handler.ts` + `webhook.ts` strings + update tests
+- [x] TASK-32 (feature): Translate `handler.ts` + `webhook.ts` strings + update tests
   - `handler.ts` `buildConfirmationMessage`: `" at "` → `" en "`, `"Log it?"` → `"¿Lo registro?"`
   - `webhook.ts` line 206: replace hardcoded `'Something went wrong, try again.'` with `formatError()`
   - Update `handler.test.ts` assertions that check English substrings in responses

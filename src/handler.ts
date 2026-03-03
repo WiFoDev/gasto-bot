@@ -161,12 +161,12 @@ function buildConfirmationMessage(
 
   if (pending.description) {
     msg += `\n"${pending.description}"`;
-    if (pending.merchant) msg += ` at ${pending.merchant}`;
+    if (pending.merchant) msg += ` en ${pending.merchant}`;
   } else if (pending.merchant) {
     msg += `\n${pending.merchant}`;
   }
 
-  msg += '\nLog it?';
+  msg += '\n¿Lo registro?';
   return msg;
 }
 

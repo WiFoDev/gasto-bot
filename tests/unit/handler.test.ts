@@ -674,7 +674,7 @@ describe('handleMessage', () => {
 
       expect(result).toContain('S/35.00');
       expect(result).toContain('Food & Dining');
-      expect(result).toMatch(/log it\?/i);
+      expect(result).toContain('¿Lo registro?');
       expect(mockedInsertExpense).not.toHaveBeenCalled();
     });
 
@@ -711,7 +711,7 @@ describe('handleMessage', () => {
 
       const result = await handleMessage(PHONE, 'text', 'almuerzo 35');
 
-      expect(result).toMatch(/log it\?/i);
+      expect(result).toContain('¿Lo registro?');
       expect(mockedInsertExpense).not.toHaveBeenCalled();
     });
   });
@@ -891,7 +891,7 @@ describe('handleMessage', () => {
 
       expect(result).toContain('S/95.60');
       expect(result).toContain('Groceries');
-      expect(result).toContain('Log it?');
+      expect(result).toContain('¿Lo registro?');
       expect(mockedInsertExpense).not.toHaveBeenCalled();
       const state = getState(PHONE);
       expect(state!.lastAction).toBe('awaiting_confirmation');
@@ -921,7 +921,7 @@ describe('handleMessage', () => {
       const result = await handleMessage(PHONE, 'text', 'es comida');
 
       expect(result).toContain('Food & Dining');
-      expect(result).toContain('Log it?');
+      expect(result).toContain('¿Lo registro?');
       expect(mockedInsertExpense).not.toHaveBeenCalled();
       const state = getState(PHONE);
       expect(state!.pendingExpense!.category_slug).toBe('food_dining');
@@ -952,7 +952,7 @@ describe('handleMessage', () => {
 
       expect(result).toContain('S/95.60');
       expect(result).toContain('Groceries');
-      expect(result).toContain('Log it?');
+      expect(result).toContain('¿Lo registro?');
       const state = getState(PHONE);
       expect(state!.pendingExpense!.amount).toBe(95.6);
       expect(state!.pendingExpense!.merchant).toBe('Wong');
