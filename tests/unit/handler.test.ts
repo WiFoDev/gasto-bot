@@ -409,6 +409,30 @@ describe('handleMessage', () => {
       expect(state!.pendingExpense!.image_url).toBeNull();
     });
 
+    it('logs structured error when storage upload fails', async () => {
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      mockedUploadImage.mockRejectedValue(new Error('Bucket not found'));
+      mockedParseReceipt.mockResolvedValue({
+        merchant: 'Metro',
+        amount: 55,
+        currency: 'PEN',
+        date: '2026-02-27',
+        confidence: 0.9,
+      });
+
+      await handleMessage(PHONE, 'image', IMAGE_URL);
+
+      const logCalls = consoleSpy.mock.calls.map(([arg]) => {
+        try { return JSON.parse(arg as string); } catch { return null; }
+      }).filter(Boolean);
+      const storageLog = logCalls.find((l: Record<string, unknown>) => l.event === 'storage_upload_error');
+      expect(storageLog).toBeDefined();
+      expect(storageLog.error).toBe('Bucket not found');
+      expect(storageLog.phone).toBe(PHONE);
+
+      consoleSpy.mockRestore();
+    });
+
     it('does not call parseMessage for image messages', async () => {
       await handleMessage(PHONE, 'image', IMAGE_URL);
 

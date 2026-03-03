@@ -457,13 +457,19 @@ async function handleImageMessage(
   // 2. Parse receipt with vision
   const receipt = await parseReceipt(buffer);
 
-  // 3. Upload to Supabase Storage
+  // 3. Upload to Supabase Storage (image data is important for future fine-tuning)
   const storageId = crypto.randomUUID();
   let imageUrl: string | null = null;
   try {
     imageUrl = await uploadImage(buffer, storageId, contentType);
-  } catch {
-    // Storage failure shouldn't block the flow
+  } catch (error) {
+    console.log(JSON.stringify({
+      event: 'storage_upload_error',
+      error: error instanceof Error ? error.message : String(error),
+      phone,
+      storageId,
+      timestamp: new Date().toISOString(),
+    }));
   }
 
   const today = getTodayDate(user.timezone);

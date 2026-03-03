@@ -11,10 +11,12 @@
 - Testing: Vitest
 
 ## Commands
-- `npm run dev` — start dev server with tsx
+- `npm run dev` — start dev server with tsx watch
 - `npm run build` — compile TypeScript
-- `npm run start` — run compiled output
-- `npm run test` — run full Vitest suite
+- `npm run start` — run compiled output (`node dist/index.js`)
+- `npm run test` — unit tests only (excludes `tests/integration/**`)
+- `npm run test:integration` — real API calls (~80s, ~$0.50/run)
+- `npm run add-user` — CLI script to register new users (`tsx scripts/add-user.ts`)
 - `npx tsc --noEmit` — type-check without emitting
 
 ## Code Style
@@ -36,7 +38,7 @@
 - `src/handler.ts` — core orchestrator: state check → parse → route intent → respond
 - `src/parse.ts` — single Claude Sonnet call per message (intent + extract + categorize)
 - `src/parse-image.ts` — Claude Vision call for receipts
-- `src/db.ts` — Supabase client + all query functions
+- `src/db.ts` — Supabase client + 16 query functions
 - `src/storage.ts` — download from Kapso → upload to Supabase Storage
 - `src/state.ts` — conversation state Map keyed by phone number
 - `src/formatter.ts` — WhatsApp-optimized response strings
@@ -44,9 +46,9 @@
 - `seed.sql` — default user + 9 categories
 
 ## Testing (CRITICAL)
-- **Unit** (`tests/unit/`): formatter, state, config. Mock `parse.ts` and `db.ts` via `vi.mock`. ALWAYS test orchestration logic, not library wrappers.
-- **Integration** (`tests/integration/`): parse accuracy (real Claude API), db queries (real Supabase), handler pipeline. These cost money — keep corpus fixed and small.
-- **Validation gates**: Text parse ≥ 85% accuracy BLOCKS handler work. Receipt parse ≥ 70% accuracy OR skip receipt features entirely.
+- **Unit** (`tests/unit/`, 10 files, 264 tests): Mock external deps via hoisted `vi.mock()`. Test orchestration logic, not library wrappers. Uses inline snapshots for formatter output.
+- **Integration** (`tests/integration/`, 5 files): Real Claude + Supabase API calls. Excluded from `npm run test` by vitest config. Run manually with `npm run test:integration`.
+- **Validation gates**: Text parse ≥ 85% accuracy (GATE #1, currently 100%). Receipt parse ≥ 70% accuracy (GATE #2).
 - **E2E**: Manual WhatsApp testing on real phone. No automated E2E framework.
 - **IMPORTANT**: If tests fail, fix the CODE, not the tests. Tests define correctness.
 - **YOU MUST** run `npm run test` before every commit.
