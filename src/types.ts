@@ -69,7 +69,7 @@ export interface ParseResult {
   merchant: string | null;
   date: string | null;
   period: 'today' | 'week' | 'month' | null;
-  correction_field: 'category' | 'amount' | null;
+  correction_field: 'category' | 'amount' | 'merchant' | null;
   error_message: string | null;
 }
 

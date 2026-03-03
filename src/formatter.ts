@@ -96,6 +96,36 @@ export function formatAmountCorrection(
   return `✅ Updated: ${newAmount} — ${category.icon} ${category.name} (was: ${old})`;
 }
 
+export function formatMerchantCorrection(
+  expense: Expense,
+  category: Category,
+  oldMerchant: string | null,
+): string {
+  const amount = formatCurrency(expense.amount, expense.currency);
+  const oldLabel = oldMerchant ?? 'none';
+  return `✅ Updated: ${amount} — ${category.icon} ${category.name} · ${expense.merchant} (was: ${oldLabel})`;
+}
+
+export function formatCorrectionGeneric(
+  updated: Expense,
+  original: { amount: number; merchant: string | null; category_id: string },
+  oldCategory: Category,
+  newCategory: Category,
+): string {
+  const amount = formatCurrency(updated.amount, updated.currency);
+  const changes: string[] = [];
+  if (updated.category_id !== original.category_id) {
+    changes.push(`${oldCategory.icon} ${oldCategory.name} → ${newCategory.icon} ${newCategory.name}`);
+  }
+  if (updated.amount !== original.amount) {
+    changes.push(`${formatCurrency(original.amount, updated.currency)} → ${amount}`);
+  }
+  if (updated.merchant !== original.merchant) {
+    changes.push(`${original.merchant ?? 'none'} → ${updated.merchant ?? 'none'}`);
+  }
+  return `✅ Updated: ${amount} — ${newCategory.icon} ${newCategory.name} (was: ${changes.join(', ')})`;
+}
+
 export function formatDeletion(expense: Expense, category: Category): string {
   const amount = formatCurrency(expense.amount, expense.currency);
   const date = formatDate(expense.date);

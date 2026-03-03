@@ -23,6 +23,8 @@ import {
   formatClarification,
   formatCorrection,
   formatAmountCorrection,
+  formatMerchantCorrection,
+  formatCorrectionGeneric,
   formatDeletion,
   formatNoExpenseToModify,
   formatError,
@@ -166,6 +168,21 @@ function buildConfirmationMessage(
 
   msg += '\nLog it?';
   return msg;
+}
+
+function applyCorrections(
+  pending: PendingExpense,
+  result: ParseResult,
+): PendingExpense {
+  return {
+    ...pending,
+    category_slug: result.category_slug ?? pending.category_slug,
+    amount: result.amount ?? pending.amount,
+    merchant: result.merchant ?? pending.merchant,
+    currency: result.currency ?? pending.currency,
+    description: result.description ?? pending.description,
+    date: result.date ?? pending.date,
+  };
 }
 
 async function handleSetBudget(
@@ -326,39 +343,75 @@ async function handleCorrectExpense(
     return formatNoExpenseToModify();
   }
 
+  // Build update payload: apply correction_field primary, plus secondary fields that represent actual changes
+  const updatePayload: Partial<Expense> = {};
+  let newCategory: Category | null = null;
+  const oldCategory = categories.find((c) => c.id === expense.category_id);
+  if (!oldCategory) return formatError();
+
+  // Primary correction field
   if (result.correction_field === 'category' && result.category_slug) {
-    const newCategory = await getCategoryBySlug(user.id, result.category_slug);
-    if (!newCategory) return formatError();
-
-    const oldCategory = categories.find((c) => c.id === expense.category_id);
-    if (!oldCategory) return formatError();
-
-    const updated = await updateExpense(expense.id, { category_id: newCategory.id });
-    setState(phone, {
-      lastAction: 'expense_logged',
-      pendingExpense: null,
-      lastExpenseId: updated.id,
-      updatedAt: Date.now(),
-    });
-    return formatCorrection(updated, oldCategory, newCategory);
+    newCategory = await getCategoryBySlug(user.id, result.category_slug);
+    if (newCategory) updatePayload.category_id = newCategory.id;
   }
-
   if (result.correction_field === 'amount' && result.amount != null) {
-    const oldAmount = expense.amount;
-    const category = categories.find((c) => c.id === expense.category_id);
-    if (!category) return formatError();
-
-    const updated = await updateExpense(expense.id, { amount: result.amount });
-    setState(phone, {
-      lastAction: 'expense_logged',
-      pendingExpense: null,
-      lastExpenseId: updated.id,
-      updatedAt: Date.now(),
-    });
-    return formatAmountCorrection(updated, category, oldAmount);
+    updatePayload.amount = result.amount;
+  }
+  if (result.correction_field === 'merchant' && result.merchant != null) {
+    updatePayload.merchant = result.merchant;
   }
 
-  return formatError();
+  // Secondary fields: include only if they represent an actual change from the existing expense
+  if (result.correction_field !== 'category' && result.category_slug) {
+    const cat = await getCategoryBySlug(user.id, result.category_slug);
+    if (cat && cat.id !== expense.category_id) {
+      newCategory = cat;
+      updatePayload.category_id = cat.id;
+    }
+  }
+  if (result.correction_field !== 'amount' && result.amount != null && result.amount !== expense.amount) {
+    updatePayload.amount = result.amount;
+  }
+  if (result.correction_field !== 'merchant' && result.merchant != null && result.merchant !== expense.merchant) {
+    updatePayload.merchant = result.merchant;
+  }
+
+  if (Object.keys(updatePayload).length === 0) {
+    return formatError();
+  }
+
+  const updated = await updateExpense(expense.id, updatePayload);
+  setState(phone, {
+    lastAction: 'expense_logged',
+    pendingExpense: null,
+    lastExpenseId: updated.id,
+    updatedAt: Date.now(),
+  });
+
+  const resolvedNewCategory = newCategory ?? oldCategory;
+
+  // Count changed fields for formatting dispatch
+  const changedFields = Object.keys(updatePayload).length;
+
+  if (changedFields === 1) {
+    if (updatePayload.category_id && newCategory) {
+      return formatCorrection(updated, oldCategory, newCategory);
+    }
+    if (updatePayload.amount != null) {
+      return formatAmountCorrection(updated, resolvedNewCategory, expense.amount);
+    }
+    if (updatePayload.merchant != null) {
+      return formatMerchantCorrection(updated, resolvedNewCategory, expense.merchant);
+    }
+  }
+
+  // Multi-field correction
+  return formatCorrectionGeneric(
+    updated,
+    { amount: expense.amount, merchant: expense.merchant, category_id: expense.category_id },
+    oldCategory,
+    resolvedNewCategory,
+  );
 }
 
 async function handleDeleteExpense(
@@ -539,6 +592,8 @@ async function handleMessageInner(
   }
 
   // 6. Handle awaiting_confirmation
+  let precomputedResult: ParseResult | null = null;
+
   if (state?.lastAction === 'awaiting_confirmation' && state.pendingExpense) {
     const trimmed = content.trim();
     if (CONFIRM_PATTERN.test(trimmed)) {
@@ -559,8 +614,37 @@ async function handleMessageInner(
       clearState(phone);
       return formatExpenseCancelled();
     }
-    // Not confirmed — clear state, fall through to re-parse as new message
+
+    // Not confirmed — parse message first, then decide
+    const truncated = content.length > MAX_MESSAGE_LENGTH
+      ? content.slice(0, MAX_MESSAGE_LENGTH)
+      : content;
+    const parsed = await parseMessage(truncated, categories);
+
+    if (parsed.intent === 'correct_expense') {
+      // Apply corrections to pending expense in-place, re-show confirmation
+      const corrected = applyCorrections(state.pendingExpense, parsed);
+      setState(phone, {
+        lastAction: 'awaiting_confirmation',
+        pendingExpense: corrected,
+        lastExpenseId: null,
+        updatedAt: Date.now(),
+      });
+
+      const category = corrected.category_slug
+        ? categories.find((c) => c.slug === corrected.category_slug) ?? null
+        : null;
+      const resolvedCategory =
+        category ??
+        categories.find((c) => c.slug === 'other') ??
+        categories[0];
+
+      return buildConfirmationMessage(corrected, resolvedCategory);
+    }
+
+    // Non-correction intent — clear state, fall through with precomputed result
     clearState(phone);
+    precomputedResult = parsed;
   }
 
   // 7. Truncate long messages before parsing
@@ -569,8 +653,8 @@ async function handleMessageInner(
       ? content.slice(0, MAX_MESSAGE_LENGTH)
       : content;
 
-  // 8. Parse the message
-  const result = await parseMessage(truncatedContent, categories);
+  // 8. Parse the message (skip if already parsed during confirmation flow)
+  const result = precomputedResult ?? await parseMessage(truncatedContent, categories);
 
   // 9. Route by intent
   switch (result.intent) {

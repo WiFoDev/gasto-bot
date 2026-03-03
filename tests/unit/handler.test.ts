@@ -59,7 +59,7 @@ import {
   getExpensesSummary,
 } from '../../src/db.js';
 import { getState, setState, clearState } from '../../src/state.js';
-import { formatHelp, formatError, formatUnknown, formatParseError, formatDatabaseError, formatNoExpenseToModify, formatReceiptUnclear, formatUnknownUser, formatExpenseCancelled } from '../../src/formatter.js';
+import { formatHelp, formatError, formatUnknown, formatParseError, formatDatabaseError, formatNoExpenseToModify, formatReceiptUnclear, formatUnknownUser, formatExpenseCancelled, formatMerchantCorrection, formatCorrectionGeneric } from '../../src/formatter.js';
 import type {
   User,
   Category,
@@ -98,6 +98,14 @@ const mockCategories: Category[] = [
     name: 'Transport',
     slug: 'transport',
     icon: '🚗',
+    is_default: true,
+  },
+  {
+    id: 'cat-groceries',
+    user_id: 'user-1',
+    name: 'Groceries',
+    slug: 'groceries',
+    icon: '🛒',
     is_default: true,
   },
   {
@@ -833,6 +841,133 @@ describe('handleMessage', () => {
       expect(result).toContain('✅');
       expect(mockedInsertExpense).toHaveBeenCalledOnce();
     });
+
+    it('corrects pending merchant during confirmation and re-shows confirmation', async () => {
+      setState(PHONE, {
+        lastAction: 'awaiting_confirmation',
+        pendingExpense: makePendingExpense({
+          amount: 95.6,
+          merchant: 'CENCOSUD',
+          category_slug: 'other',
+        }),
+        lastExpenseId: null,
+        updatedAt: Date.now(),
+      });
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'correct_expense',
+          correction_field: 'merchant',
+          merchant: 'Wong',
+          category_slug: 'groceries',
+          amount: null,
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'Es de Wong');
+
+      expect(result).toContain('S/95.60');
+      expect(result).toContain('Groceries');
+      expect(result).toContain('Log it?');
+      expect(mockedInsertExpense).not.toHaveBeenCalled();
+      const state = getState(PHONE);
+      expect(state!.lastAction).toBe('awaiting_confirmation');
+      expect(state!.pendingExpense!.merchant).toBe('Wong');
+      expect(state!.pendingExpense!.category_slug).toBe('groceries');
+    });
+
+    it('corrects pending category during confirmation and re-shows confirmation', async () => {
+      setState(PHONE, {
+        lastAction: 'awaiting_confirmation',
+        pendingExpense: makePendingExpense({
+          amount: 35,
+          category_slug: 'other',
+        }),
+        lastExpenseId: null,
+        updatedAt: Date.now(),
+      });
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'correct_expense',
+          correction_field: 'category',
+          category_slug: 'food_dining',
+          amount: null,
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'es comida');
+
+      expect(result).toContain('Food & Dining');
+      expect(result).toContain('Log it?');
+      expect(mockedInsertExpense).not.toHaveBeenCalled();
+      const state = getState(PHONE);
+      expect(state!.pendingExpense!.category_slug).toBe('food_dining');
+    });
+
+    it('corrects multiple fields during confirmation', async () => {
+      setState(PHONE, {
+        lastAction: 'awaiting_confirmation',
+        pendingExpense: makePendingExpense({
+          amount: 100,
+          merchant: null,
+          category_slug: 'other',
+        }),
+        lastExpenseId: null,
+        updatedAt: Date.now(),
+      });
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'correct_expense',
+          correction_field: 'merchant',
+          merchant: 'Wong',
+          category_slug: 'groceries',
+          amount: 95.6,
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'no, it was Wong groceries 95.60');
+
+      expect(result).toContain('S/95.60');
+      expect(result).toContain('Groceries');
+      expect(result).toContain('Log it?');
+      const state = getState(PHONE);
+      expect(state!.pendingExpense!.amount).toBe(95.6);
+      expect(state!.pendingExpense!.merchant).toBe('Wong');
+      expect(state!.pendingExpense!.category_slug).toBe('groceries');
+    });
+
+    it('falls through for non-correction intents during confirmation', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'log_expense',
+          confidence: 0.95,
+          amount: 23.5,
+          category_slug: 'transport',
+          description: 'uber',
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'uber 23.5');
+
+      // Should clear state and process as new expense
+      expect(result).toContain('✅');
+      expect(result).toContain('Transport');
+      expect(mockedParseMessage).toHaveBeenCalledOnce();
+    });
+
+    it('does not double-parse when falling through with non-correction intent', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'help',
+          confidence: 0.95,
+          amount: null,
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'help');
+
+      expect(mockedParseMessage).toHaveBeenCalledOnce();
+      expect(result).toContain('Here');
+    });
   });
 
   describe('awaiting_description flow', () => {
@@ -1036,6 +1171,66 @@ describe('handleMessage', () => {
       expect(state).not.toBeNull();
       expect(state!.lastAction).toBe('expense_logged');
       expect(state!.lastExpenseId).toBe('exp-1');
+    });
+
+    it('corrects merchant on saved expense', async () => {
+      setState(PHONE, {
+        lastAction: 'expense_logged',
+        pendingExpense: null,
+        lastExpenseId: 'exp-1',
+        updatedAt: Date.now(),
+      });
+      mockedGetExpenseById.mockResolvedValue(
+        makeExpense({ id: 'exp-1', category_id: 'cat-other', merchant: 'CENCOSUD' }),
+      );
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'correct_expense',
+          confidence: 0.9,
+          correction_field: 'merchant',
+          merchant: 'Wong',
+          category_slug: null,
+          amount: null,
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'es de Wong');
+
+      expect(result).toContain('Updated');
+      expect(result).toContain('Wong');
+      expect(result).toContain('was: CENCOSUD');
+      expect(mockedUpdateExpense).toHaveBeenCalledWith('exp-1', { merchant: 'Wong' });
+    });
+
+    it('corrects multiple fields on saved expense', async () => {
+      setState(PHONE, {
+        lastAction: 'expense_logged',
+        pendingExpense: null,
+        lastExpenseId: 'exp-1',
+        updatedAt: Date.now(),
+      });
+      mockedGetExpenseById.mockResolvedValue(
+        makeExpense({ id: 'exp-1', category_id: 'cat-other', merchant: 'CENCOSUD', amount: 95.6 }),
+      );
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'correct_expense',
+          confidence: 0.9,
+          correction_field: 'merchant',
+          merchant: 'Wong',
+          category_slug: 'groceries',
+          amount: null,
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'no, it was Wong, groceries');
+
+      expect(result).toContain('Updated');
+      expect(result).toContain('Groceries');
+      expect(mockedUpdateExpense).toHaveBeenCalledWith('exp-1', {
+        merchant: 'Wong',
+        category_id: 'cat-groceries',
+      });
     });
   });
 

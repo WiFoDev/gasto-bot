@@ -9,7 +9,7 @@ export interface MessageFixture {
     currency?: string;
     category_slug?: string;
     period?: 'today' | 'week' | 'month';
-    correction_field?: 'category' | 'amount';
+    correction_field?: 'category' | 'amount' | 'merchant';
   };
 }
 

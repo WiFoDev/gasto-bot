@@ -61,9 +61,11 @@ For "query_budget":
 - "category_slug": The category being queried. null if asking about overall budget.
 
 For "correct_expense":
-- "correction_field": "category" if correcting the category, "amount" if correcting the amount.
-- "category_slug": New category slug if correcting category.
+- "correction_field": "category" if correcting the category, "amount" if correcting the amount, "merchant" if correcting the merchant/store name.
+- "category_slug": New category slug if correcting category. Also set when the correction implies a category change (e.g., "es de Wong" → "groceries").
 - "amount": New amount if correcting amount.
+- "merchant": New merchant name if correcting merchant (e.g., "es de Wong" → "Wong").
+- When correcting multiple fields at once (e.g., "no, it was Wong, groceries"), set ALL changed fields: correction_field to the primary field, plus fill merchant, category_slug, and/or amount as needed.
 
 For "delete_expense": No additional fields needed.
 
@@ -93,7 +95,7 @@ Respond with ONLY a JSON object, no markdown, no explanation, no extra text:
   "merchant": <string or null>,
   "date": <string or null>,
   "period": <"today" | "week" | "month" | null>,
-  "correction_field": <"category" | "amount" | null>,
+  "correction_field": <"category" | "amount" | "merchant" | null>,
   "error_message": <string or null>
 }
 

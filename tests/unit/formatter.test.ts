@@ -20,6 +20,8 @@ import {
   formatReceiptUnclear,
   formatUnknownUser,
   formatUnsupportedMedia,
+  formatMerchantCorrection,
+  formatCorrectionGeneric,
 } from '../../src/formatter.js';
 import type { Expense, Category, PendingExpense, Budget, SummaryResult } from '../../src/types.js';
 
@@ -816,6 +818,61 @@ describe('formatUnsupportedMedia', () => {
   it('returns unsupported media message', () => {
     expect(formatUnsupportedMedia()).toBe(
       'I can only process text and photos right now.',
+    );
+  });
+});
+
+// ── formatMerchantCorrection ──────────────────────────────────────
+
+describe('formatMerchantCorrection', () => {
+  it('shows updated merchant with old merchant', () => {
+    const expense = makeExpense({ amount: 95.6, merchant: 'Wong' });
+    const cat = makeCategory({ name: 'Other', icon: '📦', slug: 'other' });
+    const result = formatMerchantCorrection(expense, cat, 'CENCOSUD');
+    expect(result).toContain('Updated');
+    expect(result).toContain('Wong');
+    expect(result).toContain('was: CENCOSUD');
+  });
+
+  it('shows "none" when old merchant was null', () => {
+    const expense = makeExpense({ merchant: 'Wong' });
+    const cat = makeCategory();
+    const result = formatMerchantCorrection(expense, cat, null);
+    expect(result).toContain('was: none');
+  });
+
+  it('snapshot: merchant correction', () => {
+    const expense = makeExpense({ amount: 95.6, merchant: 'Wong' });
+    const cat = makeCategory({ name: 'Other', icon: '📦' });
+    expect(formatMerchantCorrection(expense, cat, 'CENCOSUD')).toMatchInlineSnapshot(
+      `"✅ Updated: S/95.60 — 📦 Other · Wong (was: CENCOSUD)"`,
+    );
+  });
+});
+
+// ── formatCorrectionGeneric ────────────────────────────────────────
+
+describe('formatCorrectionGeneric', () => {
+  it('shows multiple changed fields', () => {
+    const updated = makeExpense({ amount: 95.6, merchant: 'Wong', category_id: 'cat-groceries' });
+    const original = { amount: 95.6, merchant: 'CENCOSUD', category_id: 'cat-other' };
+    const oldCat = makeCategory({ id: 'cat-other', name: 'Other', icon: '📦', slug: 'other' });
+    const newCat = makeCategory({ id: 'cat-groceries', name: 'Groceries', icon: '🛒', slug: 'groceries' });
+    const result = formatCorrectionGeneric(updated, original, oldCat, newCat);
+    expect(result).toContain('Updated');
+    expect(result).toContain('Groceries');
+    expect(result).toContain('Other');
+    expect(result).toContain('CENCOSUD');
+    expect(result).toContain('Wong');
+  });
+
+  it('snapshot: category + merchant change', () => {
+    const updated = makeExpense({ amount: 95.6, merchant: 'Wong', category_id: 'cat-groceries' });
+    const original = { amount: 95.6, merchant: 'CENCOSUD', category_id: 'cat-other' };
+    const oldCat = makeCategory({ id: 'cat-other', name: 'Other', icon: '📦', slug: 'other' });
+    const newCat = makeCategory({ id: 'cat-groceries', name: 'Groceries', icon: '🛒', slug: 'groceries' });
+    expect(formatCorrectionGeneric(updated, original, oldCat, newCat)).toMatchInlineSnapshot(
+      `"✅ Updated: S/95.60 — 🛒 Groceries (was: 📦 Other → 🛒 Groceries, CENCOSUD → Wong)"`,
     );
   });
 });
