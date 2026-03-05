@@ -16,6 +16,8 @@ const {
   updateExpense,
   softDeleteExpense,
   getMonthlyClosingData,
+  insertReceiptItems,
+  getReceiptItems,
 } = await import('../../src/db.js');
 
 // Direct client for test cleanup only
@@ -49,7 +51,11 @@ describe('db queries', () => {
   });
 
   afterAll(async () => {
-    // Hard-delete all test expenses first (FK on category_id)
+    // Hard-delete receipt items first (FK on expense_id)
+    if (testExpenseIds.length > 0) {
+      await supabase.from('receipt_items').delete().in('expense_id', testExpenseIds);
+    }
+    // Hard-delete all test expenses (FK on category_id)
     if (testExpenseIds.length > 0) {
       await supabase.from('expenses').delete().in('id', testExpenseIds);
     }
@@ -361,6 +367,93 @@ describe('db queries', () => {
       const data = await getMonthlyClosingData(userId, 2025, 1);
       // Previous month of Jan 2025 = Dec 2024
       expect(data.previousMonthTotal).toBeGreaterThanOrEqual(200);
+    });
+  });
+
+  describe('receipt items: insert → get → empty', () => {
+    let receiptExpenseId: string;
+
+    beforeAll(async () => {
+      const expense = await insertExpense({
+        user_id: userId,
+        category_id: foodCategoryId,
+        amount: 85.5,
+        currency: 'PEN',
+        description: 'supermercado receipt',
+        merchant: 'Plaza Vea',
+        date: '2026-03-05',
+        source: 'image',
+        raw_input: 'receipt image',
+        image_url: null,
+        ai_confidence: 0.88,
+        payment_type: null,
+        payment_method_name: null,
+      });
+      receiptExpenseId = expense.id;
+      testExpenseIds.push(receiptExpenseId);
+    });
+
+    it('insertReceiptItems stores items and returns them', async () => {
+      const items = await insertReceiptItems(receiptExpenseId, [
+        { description: 'Leche Gloria 1L', quantity: 2, unit_price: 5.5, total: 11, subcategory: 'lacteos' },
+        { description: 'Pan integral', quantity: 1, unit_price: 4.5, total: 4.5, subcategory: 'panaderia' },
+        { description: 'Detergente Ace', quantity: 1, unit_price: 12, total: 12, subcategory: 'limpieza' },
+      ]);
+
+      expect(items).toHaveLength(3);
+      expect(items[0]).toHaveProperty('id');
+      expect(items[0]).toHaveProperty('created_at');
+      expect(items[0].expense_id).toBe(receiptExpenseId);
+      expect(items[0].description).toBe('Leche Gloria 1L');
+      expect(Number(items[0].quantity)).toBe(2);
+      expect(Number(items[0].unit_price)).toBe(5.5);
+      expect(Number(items[0].total)).toBe(11);
+      expect(items[0].subcategory).toBe('lacteos');
+    });
+
+    it('getReceiptItems returns all items for an expense', async () => {
+      const items = await getReceiptItems(receiptExpenseId);
+      expect(items).toHaveLength(3);
+      const descriptions = items.map((i) => i.description);
+      expect(descriptions).toContain('Leche Gloria 1L');
+      expect(descriptions).toContain('Pan integral');
+      expect(descriptions).toContain('Detergente Ace');
+    });
+
+    it('getReceiptItems returns empty array for expense with no items', async () => {
+      // Use a different expense that has no receipt items
+      const expense = await insertExpense({
+        user_id: userId,
+        category_id: foodCategoryId,
+        amount: 10,
+        currency: 'PEN',
+        description: 'no items expense',
+        merchant: null,
+        date: '2026-03-05',
+        source: 'text',
+        raw_input: 'test',
+        image_url: null,
+        ai_confidence: 0.9,
+        payment_type: null,
+        payment_method_name: null,
+      });
+      testExpenseIds.push(expense.id);
+
+      const items = await getReceiptItems(expense.id);
+      expect(items).toEqual([]);
+    });
+
+    it('insertReceiptItems with empty array returns empty array', async () => {
+      const items = await insertReceiptItems(receiptExpenseId, []);
+      expect(items).toEqual([]);
+    });
+
+    it('insertReceiptItems handles null subcategory', async () => {
+      const items = await insertReceiptItems(receiptExpenseId, [
+        { description: 'Bolsa plastica', quantity: 1, unit_price: 0.3, total: 0.3, subcategory: null },
+      ]);
+      expect(items).toHaveLength(1);
+      expect(items[0].subcategory).toBeNull();
     });
   });
 });

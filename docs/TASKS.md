@@ -131,7 +131,7 @@
   - Backward compatible: items can be empty array
   - Depends on: TASK-51
 
-- [ ] TASK-53: DB functions for receipt items
+- [x] TASK-53: DB functions for receipt items
   - `insertReceiptItems(expenseId, items[])` and `getReceiptItems(expenseId)` in db.ts
   - Integration test
   - Depends on: TASK-51

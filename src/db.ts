@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
-import type { User, Category, Expense, CategoryTotal, SummaryResult, Budget, MonthlyClosingData } from './types.js';
+import type { User, Category, Expense, CategoryTotal, SummaryResult, Budget, MonthlyClosingData, ReceiptItem, ReceiptItemParsed } from './types.js';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -346,6 +346,43 @@ export async function getMonthlyClosingData(
     previousMonthTotal,
     budgets: budgetRes.data ?? [],
   };
+}
+
+// ── Receipt Items ──────────────────────────────────────────────────
+
+export async function insertReceiptItems(
+  expenseId: string,
+  items: ReceiptItemParsed[],
+): Promise<ReceiptItem[]> {
+  if (items.length === 0) return [];
+
+  const rows = items.map((item) => ({
+    expense_id: expenseId,
+    description: item.description,
+    quantity: item.quantity,
+    unit_price: item.unit_price,
+    total: item.total,
+    subcategory: item.subcategory,
+  }));
+
+  const { data, error } = await supabase
+    .from('receipt_items')
+    .insert(rows)
+    .select();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getReceiptItems(expenseId: string): Promise<ReceiptItem[]> {
+  const { data, error } = await supabase
+    .from('receipt_items')
+    .select('*')
+    .eq('expense_id', expenseId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return data ?? [];
 }
 
 export async function getExpensesSummary(
