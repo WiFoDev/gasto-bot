@@ -147,6 +147,7 @@ export interface PendingExpense {
   ai_confidence: number;
   payment_type: PaymentType | null;
   payment_method_name: string | null;
+  items: ReceiptItemParsed[];
 }
 
 export interface ConversationState {

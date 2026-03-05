@@ -30,6 +30,7 @@ vi.mock('../../src/db.js', () => ({
   insertCategory: vi.fn(),
   deleteCategory: vi.fn(),
   insertExpense: vi.fn(),
+  insertReceiptItems: vi.fn(),
   getExpenseById: vi.fn(),
   getLastExpense: vi.fn(),
   updateExpense: vi.fn(),
@@ -52,6 +53,7 @@ import {
   getCategoryBySlug,
   insertCategory,
   insertExpense,
+  insertReceiptItems,
   getExpenseById,
   getLastExpense,
   updateExpense,
@@ -72,6 +74,7 @@ import type {
   Budget,
   ParseResult,
   PendingExpense,
+  ReceiptItemParsed,
   ReceiptResult,
   MonthlyClosingData,
 } from '../../src/types.js';
@@ -189,6 +192,7 @@ function makePendingExpense(
     ai_confidence: 0.9,
     payment_type: null,
     payment_method_name: null,
+    items: [],
     ...overrides,
   };
 }
@@ -200,6 +204,7 @@ const mockedGetCategories = getCategories as ReturnType<typeof vi.fn>;
 const mockedGetCategoryBySlug = getCategoryBySlug as ReturnType<typeof vi.fn>;
 const mockedInsertCategory = insertCategory as ReturnType<typeof vi.fn>;
 const mockedInsertExpense = insertExpense as ReturnType<typeof vi.fn>;
+const mockedInsertReceiptItems = insertReceiptItems as ReturnType<typeof vi.fn>;
 const mockedGetExpenseById = getExpenseById as ReturnType<typeof vi.fn>;
 const mockedGetLastExpense = getLastExpense as ReturnType<typeof vi.fn>;
 const mockedUpdateExpense = updateExpense as ReturnType<typeof vi.fn>;
@@ -248,6 +253,7 @@ beforeEach(() => {
       created_at: '2026-02-27T12:00:00Z',
     }),
   );
+  mockedInsertReceiptItems.mockResolvedValue([]);
   mockedGetExpenseById.mockResolvedValue(null);
   mockedGetLastExpense.mockResolvedValue(null);
   mockedUpdateExpense.mockImplementation(async (id: string, fields: Partial<Expense>) =>
@@ -571,6 +577,94 @@ describe('handleMessage', () => {
 
       expect(result).toContain('🧾');
       expect(result).toContain('¿Está bien?');
+    });
+
+    it('stores receipt items in pending expense', async () => {
+      const items: ReceiptItemParsed[] = [
+        { description: 'Leche Gloria', quantity: 2, unit_price: 5.5, total: 11, subcategory: 'lacteos' },
+        { description: 'Pan integral', quantity: 1, unit_price: 4.2, total: 4.2, subcategory: 'panaderia' },
+      ];
+      mockedParseReceipt.mockResolvedValue({
+        merchant: 'Plaza Vea',
+        amount: 15.2,
+        currency: 'PEN',
+        date: '2026-02-27',
+        confidence: 0.85,
+        items,
+      });
+
+      await handleMessage(PHONE, 'image', IMAGE_URL);
+
+      const state = getState(PHONE);
+      expect(state!.pendingExpense!.items).toEqual(items);
+      expect(state!.pendingExpense!.items).toHaveLength(2);
+    });
+
+    it('inserts receipt items after confirming receipt with items', async () => {
+      const items: ReceiptItemParsed[] = [
+        { description: 'Leche Gloria', quantity: 2, unit_price: 5.5, total: 11, subcategory: 'lacteos' },
+        { description: 'Pan integral', quantity: 1, unit_price: 4.2, total: 4.2, subcategory: 'panaderia' },
+      ];
+      mockedParseReceipt.mockResolvedValue({
+        merchant: 'Plaza Vea',
+        amount: 15.2,
+        currency: 'PEN',
+        date: '2026-02-27',
+        confidence: 0.85,
+        items,
+      });
+
+      await handleMessage(PHONE, 'image', IMAGE_URL);
+      const result = await handleMessage(PHONE, 'text', 'si');
+
+      expect(result).toContain('✅');
+      expect(mockedInsertReceiptItems).toHaveBeenCalledWith('exp-new', items);
+    });
+
+    it('does not call insertReceiptItems when receipt has no items', async () => {
+      mockedParseReceipt.mockResolvedValue({
+        merchant: 'Wong',
+        amount: 85,
+        currency: 'PEN',
+        date: '2026-02-27',
+        confidence: 0.8,
+        items: [],
+      });
+
+      await handleMessage(PHONE, 'image', IMAGE_URL);
+      await handleMessage(PHONE, 'text', 'si');
+
+      expect(mockedInsertReceiptItems).not.toHaveBeenCalled();
+    });
+
+    it('inserts receipt items after low-confidence receipt with user description', async () => {
+      const items: ReceiptItemParsed[] = [
+        { description: 'Pollo', quantity: 1, unit_price: 25, total: 25, subcategory: 'proteina' },
+      ];
+      mockedParseReceipt.mockResolvedValue({
+        merchant: null,
+        amount: 25,
+        currency: 'PEN',
+        date: '2026-02-27',
+        confidence: 0.4,
+        items,
+      });
+
+      await handleMessage(PHONE, 'image', IMAGE_URL);
+      const result = await handleMessage(PHONE, 'text', 'groceries');
+
+      expect(result).toContain('✅');
+      expect(mockedInsertReceiptItems).toHaveBeenCalledWith('exp-new', items);
+    });
+
+    it('does not call insertReceiptItems for text expenses', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ confidence: 0.95 }),
+      );
+
+      await handleMessage(PHONE, 'text', 'almuerzo 35 soles');
+
+      expect(mockedInsertReceiptItems).not.toHaveBeenCalled();
     });
   });
 

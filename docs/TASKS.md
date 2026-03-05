@@ -136,7 +136,7 @@
   - Integration test
   - Depends on: TASK-51
 
-- [ ] TASK-54: Handler update for receipt item flow
+- [x] TASK-54: Handler update for receipt item flow
   - Include `items` in PendingExpense during receipt confirmation
   - After expense insert, insert receipt items
   - Unit tests

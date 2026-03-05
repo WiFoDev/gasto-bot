@@ -5,6 +5,7 @@ import {
   getCategoryBySlug,
   insertCategory,
   insertExpense,
+  insertReceiptItems,
   getExpenseById,
   getLastExpense,
   updateExpense,
@@ -148,6 +149,10 @@ async function resolveAndInsertExpense(
     payment_type: pending.payment_type,
     payment_method_name: pending.payment_method_name,
   });
+
+  if (pending.items.length > 0) {
+    await insertReceiptItems(expense.id, pending.items);
+  }
 
   console.log(JSON.stringify({
     event: 'expense_logged',
@@ -326,6 +331,7 @@ async function handleLogExpense(
     ai_confidence: result.confidence,
     payment_type: result.payment_type,
     payment_method_name: result.payment_method_name,
+    items: [],
   };
 
   // New category suggested — ask user to confirm creating it
@@ -553,6 +559,7 @@ async function handleImageMessage(
     ai_confidence: receipt.confidence,
     payment_type: null,
     payment_method_name: null,
+    items: receipt.items ?? [],
   };
 
   // 4. High confidence with valid amount — ask for confirmation
