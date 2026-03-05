@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
-import type { User, Category, Expense, CategoryTotal, SummaryResult, Budget } from './types.js';
+import type { User, Category, Expense, CategoryTotal, SummaryResult, Budget, MonthlyClosingData } from './types.js';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -261,6 +261,91 @@ export function getDateRange(
   monday.setUTCDate(todayDate.getUTCDate() - daysToMonday);
   const mondayStr = monday.toISOString().split('T')[0];
   return { start: mondayStr, end: todayStr };
+}
+
+export async function getMonthlyClosingData(
+  userId: string,
+  year: number,
+  month: number,
+): Promise<MonthlyClosingData> {
+  const mm = String(month).padStart(2, '0');
+  const startDate = `${year}-${mm}-01`;
+  // Last day of month: day 0 of next month = last day of current month
+  const lastDay = new Date(year, month, 0).getDate();
+  const endDate = `${year}-${mm}-${String(lastDay).padStart(2, '0')}`;
+
+  // Previous month
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear = month === 1 ? year - 1 : year;
+  const prevMm = String(prevMonth).padStart(2, '0');
+  const prevLastDay = new Date(prevYear, prevMonth, 0).getDate();
+  const prevStartDate = `${prevYear}-${prevMm}-01`;
+  const prevEndDate = `${prevYear}-${prevMm}-${String(prevLastDay).padStart(2, '0')}`;
+
+  // Fetch current month expenses with category join, previous month total, and budgets in parallel
+  const [currentRes, prevRes, budgetRes] = await Promise.all([
+    supabase
+      .from('expenses')
+      .select('amount, categories(slug, name, icon)')
+      .eq('user_id', userId)
+      .gte('date', startDate)
+      .lte('date', endDate)
+      .is('deleted_at', null),
+    supabase
+      .from('expenses')
+      .select('amount')
+      .eq('user_id', userId)
+      .gte('date', prevStartDate)
+      .lte('date', prevEndDate)
+      .is('deleted_at', null),
+    supabase
+      .from('budgets')
+      .select('*')
+      .eq('user_id', userId),
+  ]);
+
+  if (currentRes.error) throw currentRes.error;
+  if (prevRes.error) throw prevRes.error;
+  if (budgetRes.error) throw budgetRes.error;
+
+  const categoryTotals = new Map<string, CategoryTotal>();
+  let total = 0;
+
+  for (const exp of currentRes.data ?? []) {
+    const amount = Number(exp.amount);
+    total += amount;
+
+    const cat = exp.categories as unknown as { slug: string; name: string; icon: string } | null;
+    if (!cat) continue;
+
+    const existing = categoryTotals.get(cat.slug);
+    if (existing) {
+      existing.total += amount;
+    } else {
+      categoryTotals.set(cat.slug, {
+        slug: cat.slug,
+        name: cat.name,
+        icon: cat.icon,
+        total: amount,
+      });
+    }
+  }
+
+  const byCategory = Array.from(categoryTotals.values()).sort((a, b) => b.total - a.total);
+
+  const previousMonthTotal = (prevRes.data ?? []).reduce(
+    (sum, e) => sum + Number(e.amount),
+    0,
+  );
+
+  return {
+    year,
+    month,
+    total,
+    byCategory,
+    previousMonthTotal,
+    budgets: budgetRes.data ?? [],
+  };
 }
 
 export async function getExpensesSummary(

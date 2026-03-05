@@ -15,6 +15,7 @@ const {
   getLastExpense,
   updateExpense,
   softDeleteExpense,
+  getMonthlyClosingData,
 } = await import('../../src/db.js');
 
 // Direct client for test cleanup only
@@ -261,6 +262,105 @@ describe('db queries', () => {
       } else {
         expect(last).toBeNull();
       }
+    });
+  });
+
+  describe('getMonthlyClosingData', () => {
+    let closingExpenseIds: string[] = [];
+
+    beforeAll(async () => {
+      // Insert test expenses for a known month (2025-01) and previous month (2024-12)
+      const jan1 = await insertExpense({
+        user_id: userId,
+        category_id: foodCategoryId,
+        amount: 100,
+        currency: 'PEN',
+        description: 'closing test jan food',
+        merchant: null,
+        date: '2025-01-10',
+        source: 'text',
+        raw_input: 'test',
+        image_url: null,
+        ai_confidence: 0.9,
+        payment_type: null,
+        payment_method_name: null,
+      });
+      const jan2 = await insertExpense({
+        user_id: userId,
+        category_id: transportCategoryId,
+        amount: 50,
+        currency: 'PEN',
+        description: 'closing test jan transport',
+        merchant: null,
+        date: '2025-01-20',
+        source: 'text',
+        raw_input: 'test',
+        image_url: null,
+        ai_confidence: 0.9,
+        payment_type: null,
+        payment_method_name: null,
+      });
+      const dec1 = await insertExpense({
+        user_id: userId,
+        category_id: foodCategoryId,
+        amount: 200,
+        currency: 'PEN',
+        description: 'closing test dec food',
+        merchant: null,
+        date: '2024-12-15',
+        source: 'text',
+        raw_input: 'test',
+        image_url: null,
+        ai_confidence: 0.9,
+        payment_type: null,
+        payment_method_name: null,
+      });
+      closingExpenseIds = [jan1.id, jan2.id, dec1.id];
+      testExpenseIds.push(...closingExpenseIds);
+    });
+
+    it('returns correct totals and category breakdown for target month', async () => {
+      const data = await getMonthlyClosingData(userId, 2025, 1);
+
+      expect(data.year).toBe(2025);
+      expect(data.month).toBe(1);
+      // At least our 150 from test expenses (there may be others)
+      expect(data.total).toBeGreaterThanOrEqual(150);
+      // Category breakdown should include food and transport
+      const food = data.byCategory.find((c) => c.slug === 'food_dining');
+      const transport = data.byCategory.find((c) => c.slug === 'transport');
+      expect(food).toBeDefined();
+      expect(food!.total).toBeGreaterThanOrEqual(100);
+      expect(transport).toBeDefined();
+      expect(transport!.total).toBeGreaterThanOrEqual(50);
+      // Sorted descending by total
+      for (let i = 1; i < data.byCategory.length; i++) {
+        expect(data.byCategory[i - 1].total).toBeGreaterThanOrEqual(data.byCategory[i].total);
+      }
+    });
+
+    it('returns previous month total', async () => {
+      const data = await getMonthlyClosingData(userId, 2025, 1);
+      // December 2024 has at least our 200 test expense
+      expect(data.previousMonthTotal).toBeGreaterThanOrEqual(200);
+    });
+
+    it('returns budgets array', async () => {
+      const data = await getMonthlyClosingData(userId, 2025, 1);
+      expect(Array.isArray(data.budgets)).toBe(true);
+    });
+
+    it('handles month with no expenses', async () => {
+      const data = await getMonthlyClosingData(userId, 2020, 6);
+      expect(data.total).toBe(0);
+      expect(data.byCategory).toHaveLength(0);
+      expect(data.previousMonthTotal).toBe(0);
+    });
+
+    it('handles year boundary correctly (January → previous December)', async () => {
+      const data = await getMonthlyClosingData(userId, 2025, 1);
+      // Previous month of Jan 2025 = Dec 2024
+      expect(data.previousMonthTotal).toBeGreaterThanOrEqual(200);
     });
   });
 });

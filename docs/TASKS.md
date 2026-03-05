@@ -96,7 +96,7 @@
   - Update expense-parser prompt with monthly_closing intent + examples ("cierra febrero", "cierre del mes")
   - Depends on: Phase 1
 
-- [ ] TASK-48: DB query for monthly closing data
+- [x] TASK-48: DB query for monthly closing data
   - New `getMonthlyClosingData(userId, year, month)` in db.ts: expenses grouped by category + previous month total + budgets
   - Integration test
   - Depends on: TASK-47

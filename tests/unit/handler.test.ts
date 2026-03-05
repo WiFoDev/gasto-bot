@@ -39,6 +39,7 @@ vi.mock('../../src/db.js', () => ({
   getExpensesTotal: vi.fn(),
   getDateRange: vi.fn(),
   getExpensesSummary: vi.fn(),
+  getMonthlyClosingData: vi.fn(),
 }));
 
 import { handleMessage } from '../../src/handler.js';

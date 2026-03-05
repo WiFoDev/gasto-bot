@@ -190,3 +190,12 @@ export interface SummaryResult {
   startDate: string;
   endDate: string;
 }
+
+export interface MonthlyClosingData {
+  year: number;
+  month: number;
+  total: number;
+  byCategory: CategoryTotal[];
+  previousMonthTotal: number;
+  budgets: Budget[];
+}
