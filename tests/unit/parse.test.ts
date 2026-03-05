@@ -47,6 +47,8 @@ describe('parseMessage', () => {
       suggested_category_name: null,
       payment_type: null,
       payment_method_name: null,
+      target_month: null,
+      target_year: null,
       error_message: null,
     };
 
@@ -77,6 +79,8 @@ describe('parseMessage', () => {
       suggested_category_name: null,
       payment_type: null,
       payment_method_name: null,
+      target_month: null,
+      target_year: null,
       error_message: null,
     };
 
@@ -105,6 +109,8 @@ describe('parseMessage', () => {
       suggested_category_name: null,
       payment_type: null,
       payment_method_name: null,
+      target_month: null,
+      target_year: null,
       error_message: null,
     };
 
@@ -166,6 +172,8 @@ describe('parseMessage', () => {
       suggested_category_name: null,
       payment_type: null,
       payment_method_name: null,
+      target_month: null,
+      target_year: null,
       error_message: null,
     };
 
@@ -206,6 +214,8 @@ describe('parseMessage', () => {
       suggested_category_name: null,
       payment_type: null,
       payment_method_name: null,
+      target_month: null,
+      target_year: null,
       error_message: null,
     };
 
@@ -243,6 +253,8 @@ describe('parseMessage', () => {
       suggested_category_name: null,
       payment_type: 'digital_wallet',
       payment_method_name: 'Yape',
+      target_month: null,
+      target_year: null,
       error_message: null,
     };
 
@@ -271,6 +283,8 @@ describe('parseMessage', () => {
       suggested_category_name: 'Mascotas',
       payment_type: null,
       payment_method_name: null,
+      target_month: null,
+      target_year: null,
       error_message: null,
     };
 
@@ -327,6 +341,8 @@ describe('parseMessage', () => {
       suggested_category_name: null,
       payment_type: 'cash',
       payment_method_name: null,
+      target_month: null,
+      target_year: null,
       error_message: null,
     };
 
@@ -338,6 +354,66 @@ describe('parseMessage', () => {
 
     expect(result.payment_type).toBe('cash');
     expect(result.payment_method_name).toBeNull();
+  });
+
+  it('maps monthly_closing intent with target_month and target_year', async () => {
+    const apiResponse: ParseResult = {
+      intent: 'monthly_closing',
+      confidence: 0.95,
+      amount: null,
+      currency: null,
+      category_slug: null,
+      description: null,
+      merchant: null,
+      date: null,
+      period: null,
+      correction_field: null,
+      suggested_category_name: null,
+      payment_type: null,
+      payment_method_name: null,
+      target_month: 2,
+      target_year: 2026,
+      error_message: null,
+    };
+
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify(apiResponse) }],
+    });
+
+    const result = await parseMessage('cierra febrero', TEST_CATEGORIES);
+
+    expect(result.intent).toBe('monthly_closing');
+    expect(result.target_month).toBe(2);
+    expect(result.target_year).toBe(2026);
+  });
+
+  it('defaults target_month and target_year to null when AI omits them', async () => {
+    const partialResponse = {
+      intent: 'log_expense',
+      confidence: 0.9,
+      amount: 50,
+      currency: 'PEN',
+      category_slug: 'food_dining',
+      description: 'comida',
+      merchant: null,
+      date: '2026-02-26',
+      period: null,
+      correction_field: null,
+      suggested_category_name: null,
+      payment_type: null,
+      payment_method_name: null,
+      error_message: null,
+      // Missing: target_month, target_year
+    };
+
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify(partialResponse) }],
+    });
+
+    const result = await parseMessage('comida 50', TEST_CATEGORIES);
+
+    expect(result.target_month).toBeNull();
+    expect(result.target_year).toBeNull();
   });
 
   it('maps list_categories intent', async () => {
@@ -355,6 +431,8 @@ describe('parseMessage', () => {
       suggested_category_name: null,
       payment_type: null,
       payment_method_name: null,
+      target_month: null,
+      target_year: null,
       error_message: null,
     };
 

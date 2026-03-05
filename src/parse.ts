@@ -20,6 +20,8 @@ function makeErrorResult(message: string): ParseResult {
     suggested_category_name: null,
     payment_type: null,
     payment_method_name: null,
+    target_month: null,
+    target_year: null,
     error_message: message,
   };
 }
@@ -75,6 +77,8 @@ export async function parseMessage(
       suggested_category_name: (parsed.suggested_category_name as string) ?? null,
       payment_type: (parsed.payment_type as ParseResult['payment_type']) ?? null,
       payment_method_name: (parsed.payment_method_name as string) ?? null,
+      target_month: (parsed.target_month as number) ?? null,
+      target_year: (parsed.target_year as number) ?? null,
       error_message: (parsed.error_message as string) ?? null,
     };
 

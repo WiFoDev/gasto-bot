@@ -27,6 +27,7 @@ Classify the message into exactly ONE intent:
 - "correct_expense" — User is correcting the LAST logged expense. Examples: "wrong, it's transport", "no, it was 40", "actually that was groceries", "corrije, fue transporte".
 - "delete_expense" — User wants to delete the last logged expense. Examples: "delete that", "borra eso", "undo", "quita el ultimo", "cancel that".
 - "list_categories" — User wants to see their available categories. Examples: "mis categorias", "categorias", "que categorias tengo?", "my categories", "list categories".
+- "monthly_closing" — User is requesting a monthly closing/summary report. Examples: "cierra febrero", "cierre del mes", "cierre mensual", "resumen mensual", "cierre enero 2026", "monthly closing", "close the month".
 - "help" — User is asking for help or how to use the bot. Examples: "help", "ayuda", "how does this work?", "que puedo hacer?", "commands".
 - "unknown" — Message does not match any of the above intents. Gibberish, greetings without expense context, unrelated questions.
 
@@ -75,6 +76,10 @@ For "delete_expense": No additional fields needed.
 
 For "list_categories": No additional fields needed.
 
+For "monthly_closing":
+- "target_month" (required): The month number (1–12). "enero" → 1, "febrero" → 2, "marzo" → 3, etc. If the user says "del mes" or "mensual" without specifying a month, use the previous month.
+- "target_year" (required): The 4-digit year. Default to the current year (${today.slice(0, 4)}). If the target month is greater than the current month, assume the previous year.
+
 For "help": No additional fields needed.
 
 For "unknown": No additional fields needed.
@@ -111,6 +116,8 @@ Respond with ONLY a JSON object, no markdown, no explanation, no extra text:
   "correction_field": <"category" | "amount" | "merchant" | null>,
   "payment_type": <"cash" | "credit_card" | "debit_card" | "digital_wallet" | "bank_transfer" | "other" | null>,
   "payment_method_name": <string or null>,
+  "target_month": <number 1-12 or null>,
+  "target_year": <number or null>,
   "error_message": <string or null>
 }
 

@@ -61,6 +61,7 @@ export type Intent =
   | 'correct_expense'
   | 'delete_expense'
   | 'list_categories'
+  | 'monthly_closing'
   | 'help'
   | 'unknown'
   | 'error';
@@ -79,6 +80,8 @@ export interface ParseResult {
   suggested_category_name: string | null;
   payment_type: PaymentType | null;
   payment_method_name: string | null;
+  target_month: number | null;
+  target_year: number | null;
   error_message: string | null;
 }
 

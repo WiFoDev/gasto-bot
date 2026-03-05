@@ -90,7 +90,7 @@
   - Unit tests: expense at 79% (no alert), 85% (warning), 105% (exceeded)
   - Depends on: Phase 1 (TASK-45)
 
-- [ ] TASK-47: Types + prompt for monthly_closing intent
+- [x] TASK-47: Types + prompt for monthly_closing intent
   - Add `monthly_closing` to Intent type
   - Add `target_month`/`target_year` to ParseResult
   - Update expense-parser prompt with monthly_closing intent + examples ("cierra febrero", "cierre del mes")
