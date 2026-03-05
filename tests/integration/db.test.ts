@@ -8,6 +8,8 @@ const {
   getUserByPhone,
   getCategories,
   getCategoryBySlug,
+  insertCategory,
+  deleteCategory,
   insertExpense,
   getExpenseById,
   getLastExpense,
@@ -25,6 +27,7 @@ let userId: string;
 let foodCategoryId: string;
 let transportCategoryId: string;
 const testExpenseIds: string[] = [];
+const testCategoryIds: string[] = [];
 
 describe('db queries', () => {
   beforeAll(async () => {
@@ -45,9 +48,13 @@ describe('db queries', () => {
   });
 
   afterAll(async () => {
-    // Hard-delete all test expenses
+    // Hard-delete all test expenses first (FK on category_id)
     if (testExpenseIds.length > 0) {
       await supabase.from('expenses').delete().in('id', testExpenseIds);
+    }
+    // Hard-delete all test categories
+    if (testCategoryIds.length > 0) {
+      await supabase.from('categories').delete().in('id', testCategoryIds);
     }
   });
 
@@ -88,6 +95,97 @@ describe('db queries', () => {
     it('returns null for unknown slug', async () => {
       const cat = await getCategoryBySlug(userId, 'nonexistent');
       expect(cat).toBeNull();
+    });
+  });
+
+  describe('category lifecycle: insert → verify → delete', () => {
+    let categoryId: string;
+
+    it('insertCategory creates a non-default category', async () => {
+      const cat = await insertCategory(userId, 'Mascotas', 'mascotas', '🐾');
+      expect(cat).toHaveProperty('id');
+      expect(cat.name).toBe('Mascotas');
+      expect(cat.slug).toBe('mascotas');
+      expect(cat.icon).toBe('🐾');
+      expect(cat.is_default).toBe(false);
+      expect(cat.user_id).toBe(userId);
+
+      categoryId = cat.id;
+      testCategoryIds.push(categoryId);
+    });
+
+    it('getCategoryBySlug finds the new category', async () => {
+      const cat = await getCategoryBySlug(userId, 'mascotas');
+      expect(cat).not.toBeNull();
+      expect(cat!.id).toBe(categoryId);
+    });
+
+    it('getCategories includes the new category', async () => {
+      const categories = await getCategories(userId);
+      expect(categories.length).toBeGreaterThanOrEqual(10);
+      expect(categories.find((c) => c.slug === 'mascotas')).toBeDefined();
+    });
+
+    it('deleteCategory removes the non-default category', async () => {
+      await deleteCategory(userId, categoryId);
+      const cat = await getCategoryBySlug(userId, 'mascotas');
+      expect(cat).toBeNull();
+      // Remove from cleanup array since it's already deleted
+      const idx = testCategoryIds.indexOf(categoryId);
+      if (idx >= 0) testCategoryIds.splice(idx, 1);
+    });
+
+    it('deleteCategory does not remove default categories', async () => {
+      // Attempt to delete a default category — should be a no-op
+      await deleteCategory(userId, foodCategoryId);
+      const cat = await getCategoryBySlug(userId, 'food_dining');
+      expect(cat).not.toBeNull();
+    });
+  });
+
+  describe('insertExpense with payment fields', () => {
+    it('stores payment_type and payment_method_name', async () => {
+      const expense = await insertExpense({
+        user_id: userId,
+        category_id: foodCategoryId,
+        amount: 25,
+        currency: 'PEN',
+        description: 'almuerzo con yape',
+        merchant: null,
+        date: '2026-03-05',
+        source: 'text',
+        raw_input: 'almuerzo 25 con yape',
+        image_url: null,
+        ai_confidence: 0.92,
+        payment_type: 'digital_wallet',
+        payment_method_name: 'Yape',
+      });
+
+      expect(expense.payment_type).toBe('digital_wallet');
+      expect(expense.payment_method_name).toBe('Yape');
+      testExpenseIds.push(expense.id);
+    });
+
+    it('allows null payment fields', async () => {
+      const expense = await insertExpense({
+        user_id: userId,
+        category_id: foodCategoryId,
+        amount: 15,
+        currency: 'PEN',
+        description: 'cafe',
+        merchant: null,
+        date: '2026-03-05',
+        source: 'text',
+        raw_input: 'cafe 15',
+        image_url: null,
+        ai_confidence: 0.90,
+        payment_type: null,
+        payment_method_name: null,
+      });
+
+      expect(expense.payment_type).toBeNull();
+      expect(expense.payment_method_name).toBeNull();
+      testExpenseIds.push(expense.id);
     });
   });
 

@@ -27,6 +27,8 @@ vi.mock('../../src/db.js', () => ({
   getUserByPhone: vi.fn(),
   getCategories: vi.fn(),
   getCategoryBySlug: vi.fn(),
+  insertCategory: vi.fn(),
+  deleteCategory: vi.fn(),
   insertExpense: vi.fn(),
   getExpenseById: vi.fn(),
   getLastExpense: vi.fn(),

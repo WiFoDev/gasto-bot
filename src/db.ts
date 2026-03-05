@@ -40,6 +40,36 @@ export async function getCategoryBySlug(
   return data;
 }
 
+export async function insertCategory(
+  userId: string,
+  name: string,
+  slug: string,
+  icon: string,
+): Promise<Category> {
+  const { data, error } = await supabase
+    .from('categories')
+    .insert({ user_id: userId, name, slug, icon, is_default: false })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteCategory(
+  userId: string,
+  categoryId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('categories')
+    .delete()
+    .eq('id', categoryId)
+    .eq('user_id', userId)
+    .eq('is_default', false);
+
+  if (error) throw error;
+}
+
 export async function insertExpense(
   data: Omit<Expense, 'id' | 'deleted_at' | 'created_at'>,
 ): Promise<Expense> {

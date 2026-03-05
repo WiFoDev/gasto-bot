@@ -24,7 +24,7 @@
   - Update `src/types.ts`: add payment fields to `Expense`, `ParseResult`, `PendingExpense`. Add `suggested_category_name` to `ParseResult`/`PendingExpense`. Add `list_categories` intent. Add `awaiting_category_confirmation` to `LastAction`
   - Type-check with `npx tsc --noEmit`
 
-- [ ] TASK-38: DB functions for category management + payment fields
+- [x] TASK-38: DB functions for category management + payment fields
   - Add `insertCategory(userId, name, slug, icon)` and `deleteCategory(userId, categoryId)` to `src/db.ts`
   - Update `insertExpense` to accept `payment_type` and `payment_method_name`
   - Unit tests for new mock patterns
