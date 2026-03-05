@@ -123,6 +123,58 @@ describe('parseReceipt', () => {
     expect(result.confidence).toBe(0);
   });
 
+  it('parses a receipt response with line items', async () => {
+    const apiResponse: ReceiptResult = {
+      merchant: 'Metro',
+      amount: 85.40,
+      currency: 'PEN',
+      date: '2026-03-01',
+      confidence: 0.95,
+      items: [
+        { description: 'Leche Evaporada', quantity: 2, unit_price: 4.50, total: 9.00, subcategory: 'lacteos' },
+        { description: 'Pechuga de Pollo', quantity: 1, unit_price: 18.90, total: 18.90, subcategory: 'proteina' },
+        { description: 'Detergente Bolivar', quantity: 1, unit_price: 12.50, total: 12.50, subcategory: 'limpieza' },
+      ],
+    };
+
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify(apiResponse) }],
+    });
+
+    const fakeJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
+    const result = await parseReceipt(fakeJpeg);
+
+    expect(result.items).toHaveLength(3);
+    expect(result.items[0]).toEqual({
+      description: 'Leche Evaporada',
+      quantity: 2,
+      unit_price: 4.50,
+      total: 9.00,
+      subcategory: 'lacteos',
+    });
+    expect(result.items[2].subcategory).toBe('limpieza');
+  });
+
+  it('defaults items to empty array when not in response', async () => {
+    // Simulates a response from before TASK-52 (no items field)
+    const apiResponse = {
+      merchant: 'Wong',
+      amount: 50.00,
+      currency: 'PEN',
+      date: '2026-03-01',
+      confidence: 0.88,
+    };
+
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify(apiResponse) }],
+    });
+
+    const fakeJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
+    const result = await parseReceipt(fakeJpeg);
+
+    expect(result.items).toEqual([]);
+  });
+
   it('handles null fields in receipt result', async () => {
     const apiResponse: ReceiptResult = {
       merchant: null,
@@ -168,7 +220,7 @@ describe('parseReceipt', () => {
     const callArgs = mockCreate.mock.calls[0][0];
 
     expect(callArgs.model).toMatch(/claude.*sonnet/);
-    expect(callArgs.max_tokens).toBe(1024);
+    expect(callArgs.max_tokens).toBe(4096);
     expect(callArgs.temperature).toBe(0);
     expect(callArgs.system).toContain('receipt');
 

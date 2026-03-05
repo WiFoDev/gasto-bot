@@ -124,7 +124,7 @@
   - Add `items: ReceiptItemParsed[]` to `ReceiptResult`
   - Depends on: Phase 2
 
-- [ ] TASK-52: Update receipt-parser prompt for item extraction
+- [x] TASK-52: Update receipt-parser prompt for item extraction
   - Update `src/prompts/receipt-parser.ts` with line item extraction rules
   - AI assigns subcategory per item (free text: "proteina", "verdura", "limpieza", etc.)
   - Add `items` array to JSON output

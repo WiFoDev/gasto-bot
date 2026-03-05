@@ -10,6 +10,7 @@ Extract the following from the receipt image:
 2. **Merchant name** — the store or business name
 3. **Date** — when the purchase was made
 4. **Currency** — what currency was used
+5. **Line items** — individual products/services on the receipt
 
 ## Total amount extraction
 
@@ -52,6 +53,37 @@ Look for the date in this order:
 - "US$" or "USD" → "USD"
 - Most Lima receipts are in PEN — default to PEN when ambiguous
 
+## Line item extraction
+
+Extract individual products/services listed on the receipt. For each item, capture:
+- **description**: Product name as shown on the receipt. Clean up abbreviations when obvious (e.g., "LECHE EVAP" → "Leche Evaporada"), but keep original text if unclear
+- **quantity**: Number of units. Default to 1 if not shown
+- **unit_price**: Price per unit. If only the total is shown for this item, set unit_price = total
+- **total**: Line total for this item (quantity x unit_price)
+- **subcategory**: Assign a short Spanish subcategory label based on the product type. Use lowercase, singular forms. Examples:
+  - Dairy/milk products → "lacteos"
+  - Meat/chicken/fish → "proteina"
+  - Fruits/vegetables → "verdura"
+  - Bread/bakery → "panaderia"
+  - Cleaning products → "limpieza"
+  - Personal hygiene → "higiene"
+  - Drinks/beverages → "bebida"
+  - Snacks/candy → "snack"
+  - Canned/packaged food → "abarrotes"
+  - Frozen food → "congelados"
+  - Condiments/spices → "condimento"
+  - Pet food/supplies → "mascota"
+  - Medicine → "medicina"
+  - Fuel/gas → "combustible"
+  - If unsure, use a reasonable short Spanish label
+
+Rules:
+- Extract ALL visible line items. Do not skip any
+- Ignore subtotal, tax (IGV), discount, and total lines — these are NOT items
+- If the receipt is blurry or items are unreadable, return an empty items array
+- Items sum may not exactly equal the total (due to rounding, discounts, taxes) — that is OK
+- For non-itemized receipts (e.g., restaurant bills with just a total), return an empty items array
+
 ## Confidence scoring
 
 Return a confidence score between 0.0 and 1.0:
@@ -75,8 +107,17 @@ Respond with ONLY a JSON object, no markdown, no explanation, no extra text:
   "amount": <number or null>,
   "currency": <string or null>,
   "date": <string or null>,
-  "confidence": <number>
+  "confidence": <number>,
+  "items": [
+    {
+      "description": <string>,
+      "quantity": <number>,
+      "unit_price": <number>,
+      "total": <number>,
+      "subcategory": <string or null>
+    }
+  ]
 }
 
-All fields must be present. Use null if a field cannot be determined from the receipt.`;
+All fields must be present. Use null if a field cannot be determined from the receipt. The "items" array may be empty if no line items are readable.`;
 }
