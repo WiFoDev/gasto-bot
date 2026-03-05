@@ -82,7 +82,7 @@
 > **Budget alerts**: Reactive warnings appended to expense confirmation when budget is approaching/exceeded.
 > **Monthly closing**: New intent "cierra febrero" produces a comprehensive month summary.
 
-- [ ] TASK-46: Reactive budget alerts after expense logging
+- [x] TASK-46: Reactive budget alerts after expense logging
   - After `resolveAndInsertExpense`, check applicable budgets (category + overall)
   - >= 80% → `⚠️ Llevas S/640 de S/800 en Comida (80%)`
   - Exceeded → `🚨 Presupuesto excedido: S/850 / S/800`

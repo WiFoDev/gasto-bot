@@ -290,6 +290,29 @@ export function formatCategoryCreated(category: Category): string {
   return `Categoría creada: ${category.icon} ${category.name}`;
 }
 
+export function formatBudgetAlert(
+  category: Category | null,
+  spent: number,
+  budgetAmount: number,
+  currency: string,
+): string | null {
+  const percentage = budgetAmount > 0 ? Math.round((spent / budgetAmount) * 100) : 0;
+  const spentStr = formatCurrency(spent, currency);
+  const budgetStr = formatCurrency(budgetAmount, currency);
+
+  if (spent > budgetAmount) {
+    const label = category ? `de ${category.name} ` : 'general ';
+    return `🚨 Presupuesto ${label}excedido: ${spentStr} / ${budgetStr}`;
+  }
+
+  if (percentage >= 80) {
+    const label = category ? category.name : 'general';
+    return `⚠️ Llevas ${spentStr} de ${budgetStr} en ${label} (${percentage}%)`;
+  }
+
+  return null;
+}
+
 export function formatCategoryList(categories: Category[]): string {
   if (categories.length === 0) {
     return 'No hay categorías registradas.';

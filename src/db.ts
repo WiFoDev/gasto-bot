@@ -214,18 +214,23 @@ export async function upsertBudget(
 
 export async function getExpensesTotal(
   userId: string,
-  categoryId: string,
+  categoryId: string | null,
   startDate: string,
   endDate: string,
 ): Promise<number> {
-  const { data, error } = await supabase
+  let query = supabase
     .from('expenses')
     .select('amount')
     .eq('user_id', userId)
-    .eq('category_id', categoryId)
     .gte('date', startDate)
     .lte('date', endDate)
     .is('deleted_at', null);
+
+  if (categoryId !== null) {
+    query = query.eq('category_id', categoryId);
+  }
+
+  const { data, error } = await query;
 
   if (error) throw error;
   return (data ?? []).reduce((sum, e) => sum + Number(e.amount), 0);

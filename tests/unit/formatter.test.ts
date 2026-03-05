@@ -14,6 +14,7 @@ import {
   formatCurrency,
   formatBudgetConfirmation,
   formatBudgetStatus,
+  formatBudgetAlert,
   formatNoBudget,
   formatSummary,
   formatReceiptConfirmation,
@@ -1064,5 +1065,87 @@ describe('formatCategoryList', () => {
     expect(formatCategoryList([])).toMatchInlineSnapshot(
       `"No hay categorías registradas."`,
     );
+  });
+});
+
+// ── formatBudgetAlert ──────────────────────────────────────────────
+
+describe('formatBudgetAlert', () => {
+  it('returns null when usage is below 80%', () => {
+    const result = formatBudgetAlert(makeCategory(), 632, 800, 'PEN');
+    expect(result).toBeNull();
+  });
+
+  it('returns null at exactly 79%', () => {
+    const result = formatBudgetAlert(makeCategory(), 632, 800, 'PEN');
+    expect(result).toBeNull();
+  });
+
+  it('returns warning at exactly 80%', () => {
+    const result = formatBudgetAlert(makeCategory(), 640, 800, 'PEN');
+    expect(result).not.toBeNull();
+    expect(result).toContain('⚠️');
+    expect(result).toContain('Llevas');
+    expect(result).toContain('S/640.00');
+    expect(result).toContain('S/800.00');
+    expect(result).toContain('Food & Dining');
+    expect(result).toContain('80%');
+  });
+
+  it('returns warning at 85%', () => {
+    const result = formatBudgetAlert(makeCategory(), 680, 800, 'PEN');
+    expect(result).toContain('⚠️');
+    expect(result).toContain('85%');
+  });
+
+  it('returns exceeded alert when over 100%', () => {
+    const result = formatBudgetAlert(makeCategory(), 850, 800, 'PEN');
+    expect(result).not.toBeNull();
+    expect(result).toContain('🚨');
+    expect(result).toContain('excedido');
+    expect(result).toContain('S/850.00');
+    expect(result).toContain('S/800.00');
+  });
+
+  it('returns exceeded at exactly budget + 0.01', () => {
+    const result = formatBudgetAlert(makeCategory(), 800.01, 800, 'PEN');
+    expect(result).toContain('🚨');
+  });
+
+  it('uses "general" for null category in warning', () => {
+    const result = formatBudgetAlert(null, 1600, 2000, 'PEN');
+    expect(result).toContain('general');
+    expect(result).toContain('80%');
+  });
+
+  it('uses "general" for null category in exceeded', () => {
+    const result = formatBudgetAlert(null, 2100, 2000, 'PEN');
+    expect(result).toContain('general');
+    expect(result).toContain('excedido');
+  });
+
+  it('returns null for zero budget amount', () => {
+    const result = formatBudgetAlert(makeCategory(), 0, 0, 'PEN');
+    expect(result).toBeNull();
+  });
+
+  it('snapshot: category warning at 80%', () => {
+    expect(formatBudgetAlert(makeCategory(), 640, 800, 'PEN'))
+      .toMatchInlineSnapshot(`"⚠️ Llevas S/640.00 de S/800.00 en Food & Dining (80%)"`);
+  });
+
+  it('snapshot: category exceeded', () => {
+    expect(formatBudgetAlert(makeCategory(), 850, 800, 'PEN'))
+      .toMatchInlineSnapshot(`"🚨 Presupuesto de Food & Dining excedido: S/850.00 / S/800.00"`);
+  });
+
+  it('snapshot: overall warning', () => {
+    expect(formatBudgetAlert(null, 1600, 2000, 'PEN'))
+      .toMatchInlineSnapshot(`"⚠️ Llevas S/1,600.00 de S/2,000.00 en general (80%)"`);
+  });
+
+  it('snapshot: overall exceeded', () => {
+    expect(formatBudgetAlert(null, 2100, 2000, 'PEN'))
+      .toMatchInlineSnapshot(`"🚨 Presupuesto general excedido: S/2,100.00 / S/2,000.00"`);
   });
 });

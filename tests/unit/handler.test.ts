@@ -2206,4 +2206,134 @@ describe('handleMessage', () => {
       expect(insertCall.payment_type).toBe('cash');
     });
   });
+
+  describe('reactive budget alerts after expense logging', () => {
+    it('no alert when spending is below 80% of budget', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ confidence: 0.95, amount: 35, category_slug: 'food_dining' }),
+      );
+      // Category budget: 800, spent so far (including new expense): 632 = 79%
+      mockedGetBudget
+        .mockResolvedValueOnce(makeBudget({ category_id: 'cat-food', amount: 800 })) // category monthly
+        .mockResolvedValueOnce(null) // overall monthly
+        .mockResolvedValueOnce(null); // overall weekly
+      mockedGetExpensesTotal.mockResolvedValue(632);
+
+      const result = await handleMessage(PHONE, 'text', 'almuerzo 35');
+
+      expect(result).toContain('✅');
+      expect(result).not.toContain('⚠️');
+      expect(result).not.toContain('🚨');
+    });
+
+    it('appends warning when category budget reaches 85%', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ confidence: 0.95, amount: 40, category_slug: 'food_dining' }),
+      );
+      // Category budget: 800, spent so far: 680 = 85%
+      mockedGetBudget
+        .mockResolvedValueOnce(makeBudget({ category_id: 'cat-food', amount: 800 })) // category monthly
+        .mockResolvedValueOnce(null) // overall monthly
+        .mockResolvedValueOnce(null); // overall weekly
+      mockedGetExpensesTotal.mockResolvedValue(680);
+
+      const result = await handleMessage(PHONE, 'text', 'almuerzo 40');
+
+      expect(result).toContain('✅');
+      expect(result).toContain('⚠️');
+      expect(result).toContain('Llevas');
+      expect(result).toContain('S/680.00');
+      expect(result).toContain('S/800.00');
+      expect(result).toContain('85%');
+    });
+
+    it('appends exceeded alert when over budget at 105%', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ confidence: 0.95, amount: 50, category_slug: 'food_dining' }),
+      );
+      // Category budget: 800, spent so far: 840 = 105%
+      mockedGetBudget
+        .mockResolvedValueOnce(makeBudget({ category_id: 'cat-food', amount: 800 })) // category monthly
+        .mockResolvedValueOnce(null) // overall monthly
+        .mockResolvedValueOnce(null); // overall weekly
+      mockedGetExpensesTotal.mockResolvedValue(840);
+
+      const result = await handleMessage(PHONE, 'text', 'almuerzo 50');
+
+      expect(result).toContain('✅');
+      expect(result).toContain('🚨');
+      expect(result).toContain('excedido');
+      expect(result).toContain('S/840.00');
+    });
+
+    it('appends overall budget alert alongside category alert', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ confidence: 0.95, amount: 50, category_slug: 'food_dining' }),
+      );
+      // Category budget: 800 at 85%, overall budget: 2000 at 90%
+      mockedGetBudget
+        .mockResolvedValueOnce(makeBudget({ category_id: 'cat-food', amount: 800 })) // category monthly
+        .mockResolvedValueOnce(makeBudget({ category_id: null, amount: 2000 })) // overall monthly
+      mockedGetExpensesTotal
+        .mockResolvedValueOnce(680)  // category total
+        .mockResolvedValueOnce(1800); // overall total
+
+      const result = await handleMessage(PHONE, 'text', 'almuerzo 50');
+
+      expect(result).toContain('⚠️');
+      expect(result).toContain('Food & Dining');
+      expect(result).toContain('general');
+    });
+
+    it('alerts work through confirmation flow', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ confidence: 0.7, category_slug: 'food_dining' }),
+      );
+
+      await handleMessage(PHONE, 'text', 'almuerzo 35');
+
+      // Set up budget for confirmation
+      mockedGetBudget
+        .mockResolvedValueOnce(makeBudget({ category_id: 'cat-food', amount: 800 })) // category monthly
+        .mockResolvedValueOnce(null) // overall monthly
+        .mockResolvedValueOnce(null); // overall weekly
+      mockedGetExpensesTotal.mockResolvedValue(700);
+
+      const result = await handleMessage(PHONE, 'text', 'si');
+
+      expect(result).toContain('✅');
+      expect(result).toContain('⚠️');
+      expect(result).toContain('88%');
+    });
+
+    it('no alert when no budgets are set', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ confidence: 0.95, category_slug: 'food_dining' }),
+      );
+      // Default: mockedGetBudget returns null
+
+      const result = await handleMessage(PHONE, 'text', 'almuerzo 35');
+
+      expect(result).toContain('✅');
+      expect(result).not.toContain('⚠️');
+      expect(result).not.toContain('🚨');
+    });
+
+    it('checks weekly budget when no monthly budget exists', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ confidence: 0.95, amount: 50, category_slug: 'food_dining' }),
+      );
+      mockedGetBudget
+        .mockResolvedValueOnce(null) // category monthly = null
+        .mockResolvedValueOnce(makeBudget({ category_id: 'cat-food', amount: 200, period: 'weekly' })) // category weekly
+        .mockResolvedValueOnce(null) // overall monthly
+        .mockResolvedValueOnce(null); // overall weekly
+      mockedGetExpensesTotal.mockResolvedValue(170);
+
+      const result = await handleMessage(PHONE, 'text', 'almuerzo 50');
+
+      expect(result).toContain('⚠️');
+      expect(result).toContain('85%');
+    });
+  });
 });

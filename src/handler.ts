@@ -45,6 +45,7 @@ import {
   formatNewCategoryConfirmation,
   formatCategoryCreated,
   formatCategoryList,
+  formatBudgetAlert,
 } from './formatter.js';
 import { slugify } from './utils.js';
 import { CONFIDENCE_AUTO_LOG, CONFIDENCE_CONFIRM } from './config.js';
@@ -157,6 +158,46 @@ async function resolveAndInsertExpense(
   }));
 
   return { expense, category: resolvedCategory };
+}
+
+async function checkBudgetAlerts(
+  user: User,
+  categoryId: string,
+  categories: Category[],
+): Promise<string[]> {
+  const alerts: string[] = [];
+
+  // Check category budget
+  const categoryBudget =
+    (await getBudget(user.id, categoryId, 'monthly')) ??
+    (await getBudget(user.id, categoryId, 'weekly'));
+
+  if (categoryBudget) {
+    const { start, end } = getPeriodDates(categoryBudget.period, user.timezone);
+    const spent = await getExpensesTotal(user.id, categoryId, start, end);
+    const category = categories.find((c) => c.id === categoryId) ?? null;
+    const alert = formatBudgetAlert(category, spent, categoryBudget.amount, categoryBudget.currency);
+    if (alert) alerts.push(alert);
+  }
+
+  // Check overall budget
+  const overallBudget =
+    (await getBudget(user.id, null, 'monthly')) ??
+    (await getBudget(user.id, null, 'weekly'));
+
+  if (overallBudget) {
+    const { start, end } = getPeriodDates(overallBudget.period, user.timezone);
+    const spent = await getExpensesTotal(user.id, null, start, end);
+    const alert = formatBudgetAlert(null, spent, overallBudget.amount, overallBudget.currency);
+    if (alert) alerts.push(alert);
+  }
+
+  return alerts;
+}
+
+function appendAlerts(message: string, alerts: string[]): string {
+  if (alerts.length === 0) return message;
+  return message + '\n\n' + alerts.join('\n');
 }
 
 function buildConfirmationMessage(
@@ -309,7 +350,8 @@ async function handleLogExpense(
       lastExpenseId: expense.id,
       updatedAt: Date.now(),
     });
-    return formatExpenseConfirmation(expense, category);
+    const alerts = await checkBudgetAlerts(user, expense.category_id, categories);
+    return appendAlerts(formatExpenseConfirmation(expense, category), alerts);
   }
 
   // Mid confidence — ask for confirmation (unless we need a description)
@@ -618,7 +660,8 @@ async function handleMessageInner(
       lastExpenseId: expense.id,
       updatedAt: Date.now(),
     });
-    return formatExpenseConfirmation(expense, category);
+    const alerts = await checkBudgetAlerts(user, expense.category_id, categories);
+    return appendAlerts(formatExpenseConfirmation(expense, category), alerts);
   }
 
   // 6. Handle awaiting_category_confirmation
@@ -642,9 +685,10 @@ async function handleMessageInner(
         updatedAt: Date.now(),
       });
 
+      const alerts = await checkBudgetAlerts(user, expense.category_id, categories);
       const created = formatCategoryCreated(newCategory);
       const confirmed = formatExpenseConfirmation(expense, category);
-      return `${created}\n${confirmed}`;
+      return appendAlerts(`${created}\n${confirmed}`, alerts);
     }
 
     if (DENY_PATTERN.test(trimmed)) {
@@ -657,7 +701,8 @@ async function handleMessageInner(
         lastExpenseId: expense.id,
         updatedAt: Date.now(),
       });
-      return formatExpenseConfirmation(expense, category);
+      const alerts = await checkBudgetAlerts(user, expense.category_id, categories);
+      return appendAlerts(formatExpenseConfirmation(expense, category), alerts);
     }
 
     // Unrecognized reply — clear state, fall through to normal parsing
@@ -681,7 +726,8 @@ async function handleMessageInner(
         lastExpenseId: expense.id,
         updatedAt: Date.now(),
       });
-      return formatExpenseConfirmation(expense, category);
+      const alerts = await checkBudgetAlerts(user, expense.category_id, categories);
+      return appendAlerts(formatExpenseConfirmation(expense, category), alerts);
     }
     if (DENY_PATTERN.test(trimmed)) {
       clearState(phone);
