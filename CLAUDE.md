@@ -73,7 +73,7 @@
 - Chain multiple LLM calls per message — single call only
 - Add cron jobs, event-driven triggers, or proactive alerts
 - Add multi-user auth, RLS, or onboarding flows
-- Parse receipt line items — totals only
+- Receipt items are sub-items of ONE expense, not multiple expenses
 - Parse multiple expenses from a single message
 - Add Moment.js — use `Intl.DateTimeFormat` or `date-fns-tz`
 - Add a logging library — use structured `console.log`

@@ -148,7 +148,7 @@
   - Inline snapshot tests
   - Depends on: TASK-54
 
-- [ ] TASK-56: Update CLAUDE.md for Phase 3
+- [x] TASK-56: Update CLAUDE.md for Phase 3
   - Remove "Parse receipt line items — totals only" from Do NOT list
   - Add: "Receipt items are sub-items of ONE expense, not multiple expenses"
   - Depends on: TASK-55
