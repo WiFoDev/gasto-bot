@@ -46,7 +46,7 @@
 - `seed.sql` — default user + 9 categories
 
 ## Testing (CRITICAL)
-- **Unit** (`tests/unit/`, 10 files, 265 tests): Mock external deps via hoisted `vi.mock()`. Test orchestration logic, not library wrappers. Uses inline snapshots for formatter output.
+- **Unit** (`tests/unit/`, 10 files, 268 tests): Mock external deps via hoisted `vi.mock()`. Test orchestration logic, not library wrappers. Uses inline snapshots for formatter output.
 - **Integration** (`tests/integration/`, 5 files): Real Claude + Supabase API calls. Excluded from `npm run test` by vitest config. Run manually with `npm run test:integration`.
 - **Validation gates**: Text parse ≥ 85% accuracy (GATE #1, currently 100%). Receipt parse ≥ 70% accuracy (GATE #2).
 - **E2E**: Manual WhatsApp testing on real phone. No automated E2E framework.

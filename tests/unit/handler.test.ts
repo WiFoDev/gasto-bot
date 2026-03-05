@@ -959,7 +959,110 @@ describe('handleMessage', () => {
       expect(state!.pendingExpense!.category_slug).toBe('groceries');
     });
 
-    it('falls through for non-correction intents during confirmation', async () => {
+    it('passes confirmation context to parseMessage during confirmation', async () => {
+      setState(PHONE, {
+        lastAction: 'awaiting_confirmation',
+        pendingExpense: makePendingExpense({
+          amount: 100,
+          currency: 'PEN',
+          merchant: 'Yape',
+          category_slug: 'other',
+        }),
+        lastExpenseId: null,
+        updatedAt: Date.now(),
+      });
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'correct_expense',
+          correction_field: 'merchant',
+          merchant: 'Faustina Limpieza',
+        }),
+      );
+
+      await handleMessage(PHONE, 'text', 'Faustina Limpieza');
+
+      expect(mockedParseMessage).toHaveBeenCalledWith(
+        'Faustina Limpieza',
+        expect.any(Array),
+        {
+          pendingConfirmation: {
+            amount: 100,
+            currency: 'PEN',
+            merchant: 'Yape',
+            category_slug: 'other',
+          },
+        },
+      );
+    });
+
+    it('treats amountless log_expense as correction during confirmation (fallback)', async () => {
+      setState(PHONE, {
+        lastAction: 'awaiting_confirmation',
+        pendingExpense: makePendingExpense({
+          amount: 100,
+          merchant: 'Yape',
+          category_slug: 'other',
+        }),
+        lastExpenseId: null,
+        updatedAt: Date.now(),
+      });
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'log_expense',
+          confidence: 0.5,
+          amount: null,
+          description: 'Faustina Limpieza',
+          merchant: null,
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'Faustina Limpieza');
+
+      // Should stay in confirmation with corrected merchant
+      expect(result).toContain('S/100.00');
+      expect(result).toContain('¿Lo registro?');
+      expect(mockedInsertExpense).not.toHaveBeenCalled();
+      const state = getState(PHONE);
+      expect(state!.lastAction).toBe('awaiting_confirmation');
+      expect(state!.pendingExpense!.merchant).toBe('Faustina Limpieza');
+      expect(state!.pendingExpense!.amount).toBe(100);
+    });
+
+    it('treats unknown intent as correction during confirmation (fallback)', async () => {
+      setState(PHONE, {
+        lastAction: 'awaiting_confirmation',
+        pendingExpense: makePendingExpense({
+          amount: 50,
+          merchant: null,
+          category_slug: 'other',
+        }),
+        lastExpenseId: null,
+        updatedAt: Date.now(),
+      });
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'unknown',
+          confidence: 0,
+          amount: null,
+          currency: null,
+          category_slug: null,
+          description: null,
+          merchant: null,
+          date: null,
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'Wong');
+
+      expect(result).toContain('S/50.00');
+      expect(result).toContain('¿Lo registro?');
+      expect(mockedInsertExpense).not.toHaveBeenCalled();
+      const state = getState(PHONE);
+      expect(state!.lastAction).toBe('awaiting_confirmation');
+      expect(state!.pendingExpense!.merchant).toBe('Wong');
+    });
+
+    it('still falls through for log_expense WITH amount during confirmation', async () => {
       mockedParseMessage.mockResolvedValue(
         makeParseResult({
           intent: 'log_expense',

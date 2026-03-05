@@ -43,7 +43,7 @@ import {
   formatExpenseCancelled,
 } from './formatter.js';
 import { CONFIDENCE_AUTO_LOG, CONFIDENCE_CONFIRM } from './config.js';
-import type { Category, Expense, ParseResult, PendingExpense, User } from './types.js';
+import type { Category, Expense, ParseContext, ParseResult, PendingExpense, User } from './types.js';
 
 function getTodayDate(timezone: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date());
@@ -625,11 +625,38 @@ async function handleMessageInner(
     const truncated = content.length > MAX_MESSAGE_LENGTH
       ? content.slice(0, MAX_MESSAGE_LENGTH)
       : content;
-    const parsed = await parseMessage(truncated, categories);
+    const confirmContext: ParseContext = {
+      pendingConfirmation: {
+        amount: state.pendingExpense.amount,
+        currency: state.pendingExpense.currency,
+        merchant: state.pendingExpense.merchant,
+        category_slug: state.pendingExpense.category_slug,
+      },
+    };
+    const parsed = await parseMessage(truncated, categories, confirmContext);
 
-    if (parsed.intent === 'correct_expense') {
-      // Apply corrections to pending expense in-place, re-show confirmation
-      const corrected = applyCorrections(state.pendingExpense, parsed);
+    // Correction detected — apply to pending expense, re-show confirmation
+    const isCorrectionIntent = parsed.intent === 'correct_expense';
+    // Fallback: amountless log_expense or unknown during confirmation = likely a correction
+    const isFallbackCorrection =
+      !isCorrectionIntent &&
+      (parsed.intent === 'log_expense' && !parsed.amount ||
+       parsed.intent === 'unknown');
+
+    if (isCorrectionIntent || isFallbackCorrection) {
+      // For fallback corrections, only use merchant from raw text (ignore stale parsed fields)
+      const correctionData: ParseResult = isFallbackCorrection
+        ? {
+            ...parsed,
+            amount: null,
+            currency: null,
+            description: null,
+            date: null,
+            category_slug: parsed.category_slug !== 'other' ? parsed.category_slug : null,
+            merchant: parsed.merchant ?? content.trim(),
+          }
+        : parsed;
+      const corrected = applyCorrections(state.pendingExpense, correctionData);
       setState(phone, {
         lastAction: 'awaiting_confirmation',
         pendingExpense: corrected,

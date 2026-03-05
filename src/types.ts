@@ -81,6 +81,17 @@ export interface ReceiptResult {
   confidence: number;
 }
 
+// ── Parse Context ────────────────────────────────────────────────
+
+export interface ParseContext {
+  pendingConfirmation?: {
+    amount: number;
+    currency: string;
+    merchant: string | null;
+    category_slug: string | null;
+  };
+}
+
 // ── Conversation State ────────────────────────────────────────────
 
 export type LastAction =

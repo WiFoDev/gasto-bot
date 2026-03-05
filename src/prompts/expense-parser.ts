@@ -1,8 +1,9 @@
-import type { Category } from '../types.js';
+import type { Category, ParseContext } from '../types.js';
 
 export function expenseParserPrompt(
   categories: Category[],
   today: string,
+  context?: ParseContext,
 ): string {
   const categoryList = categories
     .map((c) => `  - "${c.slug}" → ${c.name} ${c.icon}`)
@@ -81,7 +82,13 @@ Return a confidence score between 0.0 and 1.0:
 - 0.5–0.69: Ambiguous, might be misinterpreting (e.g., "spent 50" — expense but unclear category)
 - Below 0.5: Very uncertain, likely wrong interpretation
 
-## Output format
+${context?.pendingConfirmation ? `## Current context
+
+The user is being asked to confirm a pending expense: ${context.pendingConfirmation.amount} ${context.pendingConfirmation.currency}${context.pendingConfirmation.merchant ? ` at ${context.pendingConfirmation.merchant}` : ''}${context.pendingConfirmation.category_slug ? `, category "${context.pendingConfirmation.category_slug}"` : ''}.
+
+IMPORTANT: If the user sends a merchant name, category name, or description WITHOUT an amount or explicit expense-logging language, classify as "correct_expense" (they are correcting the pending expense, not logging a new one). Only classify as "log_expense" if the message contains a clear numeric amount for a NEW expense.
+
+` : ''}## Output format
 
 Respond with ONLY a JSON object, no markdown, no explanation, no extra text:
 

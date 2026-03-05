@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { ANTHROPIC_API_KEY, DEFAULT_TIMEZONE } from './config.js';
 import { expenseParserPrompt } from './prompts/expense-parser.js';
-import type { Category, ParseResult } from './types.js';
+import type { Category, ParseContext, ParseResult } from './types.js';
 
 const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
@@ -31,12 +31,13 @@ function extractJson(text: string): string {
 export async function parseMessage(
   text: string,
   categories: Category[],
+  context?: ParseContext,
 ): Promise<ParseResult> {
   const today = new Intl.DateTimeFormat('en-CA', {
     timeZone: DEFAULT_TIMEZONE,
   }).format(new Date()); // en-CA gives YYYY-MM-DD format
 
-  const systemPrompt = expenseParserPrompt(categories, today);
+  const systemPrompt = expenseParserPrompt(categories, today, context);
 
   const startMs = Date.now();
 
