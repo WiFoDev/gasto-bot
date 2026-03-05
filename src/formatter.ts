@@ -1,4 +1,4 @@
-import type { Expense, Category, PendingExpense, Budget, SummaryResult } from './types.js';
+import type { Expense, Category, PendingExpense, Budget, SummaryResult, PaymentType } from './types.js';
 
 const MAX_DESCRIPTION_LENGTH = 50;
 
@@ -32,6 +32,15 @@ function truncate(text: string, max: number): string {
   return text.slice(0, max - 1) + '…';
 }
 
+const PAYMENT_TYPE_LABELS: Record<PaymentType, string> = {
+  cash: 'efectivo',
+  credit_card: 'tarjeta de crédito',
+  debit_card: 'tarjeta de débito',
+  digital_wallet: 'billetera digital',
+  bank_transfer: 'transferencia',
+  other: 'otro',
+};
+
 export function formatExpenseConfirmation(
   expense: Expense,
   category: Category,
@@ -50,6 +59,11 @@ export function formatExpenseConfirmation(
     detail.push(expense.merchant);
   }
   detail.push(date);
+
+  if (expense.payment_type) {
+    const label = expense.payment_method_name ?? PAYMENT_TYPE_LABELS[expense.payment_type];
+    detail.push(`con ${label}`);
+  }
 
   const line2 = detail.join(' · ');
 
@@ -258,4 +272,31 @@ export function formatUnknownUser(): string {
 
 export function formatUnsupportedMedia(): string {
   return 'Solo puedo procesar texto y fotos por ahora.';
+}
+
+export function formatNewCategoryConfirmation(
+  pending: PendingExpense,
+  suggestedName: string,
+): string {
+  const amount = formatCurrency(pending.amount, pending.currency);
+  let line1 = amount;
+  if (pending.description) {
+    line1 += ` — "${truncate(pending.description, MAX_DESCRIPTION_LENGTH)}"`;
+  }
+  return `${line1}\nNo tengo la categoría '${suggestedName}'. ¿La creo?`;
+}
+
+export function formatCategoryCreated(category: Category): string {
+  return `Categoría creada: ${category.icon} ${category.name}`;
+}
+
+export function formatCategoryList(categories: Category[]): string {
+  if (categories.length === 0) {
+    return 'No hay categorías registradas.';
+  }
+  let msg = '📋 Tus categorías:\n';
+  for (const cat of categories) {
+    msg += `\n${cat.icon} ${cat.name}`;
+  }
+  return msg;
 }

@@ -47,7 +47,7 @@
   - Update `tests/unit/parse.test.ts` with new JSON shape tests
   - Depends on: TASK-37, TASK-40
 
-- [ ] TASK-42: Formatter — new category confirmation + payment display
+- [x] TASK-42: Formatter — new category confirmation + payment display
   - Add `formatNewCategoryConfirmation(pending, suggestedName)`: "S/120.00 — No tengo 'Mascotas'. Creo la categoria?"
   - Add `formatCategoryCreated(category)`: "Categoria creada: 🐾 Mascotas"
   - Add `formatCategoryList(categories)`: list all user categories with icons

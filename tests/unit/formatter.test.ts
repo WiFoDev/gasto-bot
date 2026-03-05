@@ -22,6 +22,9 @@ import {
   formatUnsupportedMedia,
   formatMerchantCorrection,
   formatCorrectionGeneric,
+  formatNewCategoryConfirmation,
+  formatCategoryCreated,
+  formatCategoryList,
 } from '../../src/formatter.js';
 import type { Expense, Category, PendingExpense, Budget, SummaryResult } from '../../src/types.js';
 
@@ -879,6 +882,187 @@ describe('formatCorrectionGeneric', () => {
     const newCat = makeCategory({ id: 'cat-groceries', name: 'Groceries', icon: '🛒', slug: 'groceries' });
     expect(formatCorrectionGeneric(updated, original, oldCat, newCat)).toMatchInlineSnapshot(
       `"✅ Actualizado: S/95.60 — 🛒 Groceries (era: 📦 Other → 🛒 Groceries, CENCOSUD → Wong)"`,
+    );
+  });
+});
+
+// ── formatExpenseConfirmation with payment ──────────────────────────
+
+describe('formatExpenseConfirmation with payment', () => {
+  it('shows payment method name when present', () => {
+    const result = formatExpenseConfirmation(
+      makeExpense({ payment_type: 'digital_wallet', payment_method_name: 'Yape' }),
+      makeCategory(),
+    );
+    expect(result).toContain('Yape');
+  });
+
+  it('shows payment type label when no method name', () => {
+    const result = formatExpenseConfirmation(
+      makeExpense({ payment_type: 'cash', payment_method_name: null }),
+      makeCategory(),
+    );
+    expect(result).toContain('efectivo');
+  });
+
+  it('does not show payment info when payment_type is null', () => {
+    const result = formatExpenseConfirmation(
+      makeExpense({ payment_type: null, payment_method_name: null }),
+      makeCategory(),
+    );
+    expect(result).not.toContain('con ');
+  });
+
+  it('snapshot: expense with Yape payment', () => {
+    expect(
+      formatExpenseConfirmation(
+        makeExpense({ payment_type: 'digital_wallet', payment_method_name: 'Yape' }),
+        makeCategory(),
+      ),
+    ).toMatchInlineSnapshot(`
+      "✅ S/35.00 — 🍽 Food & Dining
+      "almuerzo" · 25 feb · con Yape"
+    `);
+  });
+
+  it('snapshot: expense with cash payment', () => {
+    expect(
+      formatExpenseConfirmation(
+        makeExpense({ payment_type: 'cash' }),
+        makeCategory(),
+      ),
+    ).toMatchInlineSnapshot(`
+      "✅ S/35.00 — 🍽 Food & Dining
+      "almuerzo" · 25 feb · con efectivo"
+    `);
+  });
+
+  it('snapshot: expense with credit card payment', () => {
+    expect(
+      formatExpenseConfirmation(
+        makeExpense({ payment_type: 'credit_card' }),
+        makeCategory(),
+      ),
+    ).toMatchInlineSnapshot(`
+      "✅ S/35.00 — 🍽 Food & Dining
+      "almuerzo" · 25 feb · con tarjeta de crédito"
+    `);
+  });
+});
+
+// ── formatNewCategoryConfirmation ──────────────────────────────────
+
+describe('formatNewCategoryConfirmation', () => {
+  it('shows amount and suggested category name', () => {
+    const pending = makePendingExpense({ amount: 120, suggested_category_name: 'Mascotas' });
+    const result = formatNewCategoryConfirmation(pending, 'Mascotas');
+    expect(result).toContain('S/120.00');
+    expect(result).toContain('Mascotas');
+    expect(result).toContain('?');
+  });
+
+  it('includes description when present', () => {
+    const pending = makePendingExpense({
+      amount: 120,
+      description: 'veterinario',
+      suggested_category_name: 'Mascotas',
+    });
+    const result = formatNewCategoryConfirmation(pending, 'Mascotas');
+    expect(result).toContain('veterinario');
+  });
+
+  it('works with USD currency', () => {
+    const pending = makePendingExpense({
+      amount: 50,
+      currency: 'USD',
+      suggested_category_name: 'Gym',
+    });
+    const result = formatNewCategoryConfirmation(pending, 'Gym');
+    expect(result).toContain('$50.00');
+  });
+
+  it('snapshot: basic new category confirmation', () => {
+    expect(
+      formatNewCategoryConfirmation(
+        makePendingExpense({ amount: 120, description: 'veterinario' }),
+        'Mascotas',
+      ),
+    ).toMatchInlineSnapshot(`
+      "S/120.00 — "veterinario"
+      No tengo la categoría 'Mascotas'. ¿La creo?"
+    `);
+  });
+
+  it('snapshot: without description', () => {
+    expect(
+      formatNewCategoryConfirmation(
+        makePendingExpense({ amount: 80 }),
+        'Gym & Fitness',
+      ),
+    ).toMatchInlineSnapshot(`
+      "S/80.00
+      No tengo la categoría 'Gym & Fitness'. ¿La creo?"
+    `);
+  });
+});
+
+// ── formatCategoryCreated ──────────────────────────────────────────
+
+describe('formatCategoryCreated', () => {
+  it('shows icon and name', () => {
+    const result = formatCategoryCreated(makeCategory({ name: 'Mascotas', icon: '🐾' }));
+    expect(result).toContain('🐾');
+    expect(result).toContain('Mascotas');
+  });
+
+  it('snapshot: category created', () => {
+    expect(
+      formatCategoryCreated(makeCategory({ name: 'Mascotas', icon: '🐾' })),
+    ).toMatchInlineSnapshot(`"Categoría creada: 🐾 Mascotas"`);
+  });
+});
+
+// ── formatCategoryList ─────────────────────────────────────────────
+
+describe('formatCategoryList', () => {
+  it('lists all categories with icons', () => {
+    const categories = [
+      makeCategory({ name: 'Food & Dining', icon: '🍽', slug: 'food_dining' }),
+      makeCategory({ name: 'Transport', icon: '🚗', slug: 'transport' }),
+      makeCategory({ name: 'Mascotas', icon: '🐾', slug: 'mascotas' }),
+    ];
+    const result = formatCategoryList(categories);
+    expect(result).toContain('🍽 Food & Dining');
+    expect(result).toContain('🚗 Transport');
+    expect(result).toContain('🐾 Mascotas');
+  });
+
+  it('shows message for empty categories', () => {
+    const result = formatCategoryList([]);
+    expect(result).toContain('No hay categorías');
+  });
+
+  it('snapshot: multiple categories', () => {
+    expect(
+      formatCategoryList([
+        makeCategory({ name: 'Food & Dining', icon: '🍽' }),
+        makeCategory({ name: 'Transport', icon: '🚗' }),
+        makeCategory({ name: 'Groceries', icon: '🛒' }),
+        makeCategory({ name: 'Mascotas', icon: '🐾' }),
+      ]),
+    ).toMatchInlineSnapshot(`
+      "📋 Tus categorías:
+
+      🍽 Food & Dining
+      🚗 Transport
+      🛒 Groceries
+      🐾 Mascotas"
+    `);
+  });
+
+  it('snapshot: empty list', () => {
+    expect(formatCategoryList([])).toMatchInlineSnapshot(
+      `"No hay categorías registradas."`,
     );
   });
 });
