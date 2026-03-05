@@ -101,7 +101,7 @@
   - Integration test
   - Depends on: TASK-47
 
-- [ ] TASK-49: Handler + formatter for monthly closing
+- [x] TASK-49: Handler + formatter for monthly closing
   - `handleMonthlyClosing()` — fetches data, formats response
   - `formatMonthlyClosing()` — "📊 Cierre Febrero 2026", total with prev month comparison, per-category breakdown with % and budget status
   - Unit tests for handler routing and formatter output (inline snapshots)

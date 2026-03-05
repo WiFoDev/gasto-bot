@@ -14,6 +14,7 @@ import {
   getExpensesTotal,
   getDateRange,
   getExpensesSummary,
+  getMonthlyClosingData,
 } from './db.js';
 import { parseMessage } from './parse.js';
 import { parseReceipt } from './parse-image.js';
@@ -46,6 +47,7 @@ import {
   formatCategoryCreated,
   formatCategoryList,
   formatBudgetAlert,
+  formatMonthlyClosing,
 } from './formatter.js';
 import { slugify } from './utils.js';
 import { CONFIDENCE_AUTO_LOG, CONFIDENCE_CONFIRM } from './config.js';
@@ -583,6 +585,20 @@ async function handleImageMessage(
   return formatReceiptUnclear();
 }
 
+async function handleMonthlyClosing(
+  user: User,
+  result: ParseResult,
+): Promise<string> {
+  const { year, month } = getLocalDateParts(user.timezone);
+
+  // Use parsed month/year or default to current
+  const targetMonth = result.target_month ?? month;
+  const targetYear = result.target_year ?? year;
+
+  const data = await getMonthlyClosingData(user.id, targetYear, targetMonth);
+  return formatMonthlyClosing(data, user.currency);
+}
+
 const MAX_MESSAGE_LENGTH = 500;
 const CONFIRM_PATTERN = /^(yes|y|yep|yeah|sure|si|sí|sip|sep|ok|okay|dale|claro|va)$/i;
 const DENY_PATTERN = /^(no|nop|nope|nah|nel|cancel|cancelar)$/i;
@@ -820,6 +836,8 @@ async function handleMessageInner(
       const summary = await getExpensesSummary(user.id, start, end);
       return formatSummary(summary, period, user.currency);
     }
+    case 'monthly_closing':
+      return handleMonthlyClosing(user, result);
     case 'list_categories':
       return formatCategoryList(categories);
     case 'help':

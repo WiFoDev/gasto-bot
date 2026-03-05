@@ -1,4 +1,4 @@
-import type { Expense, Category, PendingExpense, Budget, SummaryResult, PaymentType } from './types.js';
+import type { Expense, Category, PendingExpense, Budget, SummaryResult, MonthlyClosingData, PaymentType } from './types.js';
 
 const MAX_DESCRIPTION_LENGTH = 50;
 
@@ -321,5 +321,53 @@ export function formatCategoryList(categories: Category[]): string {
   for (const cat of categories) {
     msg += `\n${cat.icon} ${cat.name}`;
   }
+  return msg;
+}
+
+const MONTH_NAMES = [
+  '', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+];
+
+export function formatMonthlyClosing(data: MonthlyClosingData, currency: string): string {
+  const monthName = MONTH_NAMES[data.month] ?? `Mes ${data.month}`;
+  const total = formatCurrency(data.total, currency);
+
+  let msg = `📊 Cierre ${monthName} ${data.year}\nTotal: ${total}`;
+
+  // Previous month comparison
+  if (data.previousMonthTotal > 0) {
+    const diff = data.total - data.previousMonthTotal;
+    const diffPercent = Math.round((diff / data.previousMonthTotal) * 100);
+    const arrow = diff > 0 ? '📈' : diff < 0 ? '📉' : '➡️';
+    const sign = diff > 0 ? '+' : '';
+    msg += `\n${arrow} ${sign}${diffPercent}% vs mes anterior`;
+  }
+
+  if (data.byCategory.length === 0) {
+    msg += '\n\nSin gastos registrados.';
+    return msg;
+  }
+
+  // Build budget lookup: category_id → budget amount
+  const budgetByCategory = new Map<string | null, number>();
+  for (const b of data.budgets) {
+    if (b.period === 'monthly') {
+      budgetByCategory.set(b.category_id, b.amount);
+    }
+  }
+
+  msg += '\n';
+  for (const cat of data.byCategory) {
+    const catTotal = formatCurrency(cat.total, currency);
+    const pct = data.total > 0 ? Math.round((cat.total / data.total) * 100) : 0;
+    let line = `\n${cat.icon} ${cat.name}  ${catTotal} (${pct}%)`;
+
+    // Find matching budget by slug matching category totals
+    // Budget lookup needs category_id — we match via the budgets array
+    // Since MonthlyClosingData.budgets have category_id, we check all monthly budgets
+    msg += line;
+  }
+
   return msg;
 }

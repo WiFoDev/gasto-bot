@@ -26,8 +26,9 @@ import {
   formatNewCategoryConfirmation,
   formatCategoryCreated,
   formatCategoryList,
+  formatMonthlyClosing,
 } from '../../src/formatter.js';
-import type { Expense, Category, PendingExpense, Budget, SummaryResult } from '../../src/types.js';
+import type { Expense, Category, PendingExpense, Budget, SummaryResult, MonthlyClosingData } from '../../src/types.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -1147,5 +1148,141 @@ describe('formatBudgetAlert', () => {
   it('snapshot: overall exceeded', () => {
     expect(formatBudgetAlert(null, 2100, 2000, 'PEN'))
       .toMatchInlineSnapshot(`"🚨 Presupuesto general excedido: S/2,100.00 / S/2,000.00"`);
+  });
+});
+
+// ── formatMonthlyClosing ────────────────────────────────────────────
+
+function makeMonthlyClosingData(overrides: Partial<MonthlyClosingData> = {}): MonthlyClosingData {
+  return {
+    year: 2026,
+    month: 2,
+    total: 1850,
+    byCategory: [
+      { slug: 'food_dining', name: 'Food & Dining', icon: '🍽', total: 850 },
+      { slug: 'transport', name: 'Transport', icon: '🚗', total: 450 },
+      { slug: 'groceries', name: 'Groceries', icon: '🛒', total: 350 },
+      { slug: 'entertainment', name: 'Entertainment', icon: '🎬', total: 200 },
+    ],
+    previousMonthTotal: 1500,
+    budgets: [
+      makeBudget({ category_id: 'cat-1', amount: 800, period: 'monthly' }),
+    ],
+    ...overrides,
+  };
+}
+
+describe('formatMonthlyClosing', () => {
+  it('includes month name and year in header', () => {
+    const result = formatMonthlyClosing(makeMonthlyClosingData(), 'PEN');
+    expect(result).toContain('Cierre Febrero 2026');
+  });
+
+  it('includes total amount', () => {
+    const result = formatMonthlyClosing(makeMonthlyClosingData(), 'PEN');
+    expect(result).toContain('S/1,850.00');
+  });
+
+  it('shows comparison with previous month when available', () => {
+    const result = formatMonthlyClosing(makeMonthlyClosingData(), 'PEN');
+    expect(result).toContain('vs mes anterior');
+    expect(result).toContain('+23%');
+    expect(result).toContain('📈');
+  });
+
+  it('shows decrease when spending went down', () => {
+    const result = formatMonthlyClosing(
+      makeMonthlyClosingData({ total: 1200, previousMonthTotal: 1500 }),
+      'PEN',
+    );
+    expect(result).toContain('📉');
+    expect(result).toContain('-20%');
+  });
+
+  it('does not show comparison when previous month is 0', () => {
+    const result = formatMonthlyClosing(
+      makeMonthlyClosingData({ previousMonthTotal: 0 }),
+      'PEN',
+    );
+    expect(result).not.toContain('vs mes anterior');
+  });
+
+  it('lists categories with percentages', () => {
+    const result = formatMonthlyClosing(makeMonthlyClosingData(), 'PEN');
+    expect(result).toContain('🍽 Food & Dining');
+    expect(result).toContain('46%');
+    expect(result).toContain('🚗 Transport');
+    expect(result).toContain('24%');
+  });
+
+  it('shows empty message when no expenses', () => {
+    const result = formatMonthlyClosing(
+      makeMonthlyClosingData({ total: 0, byCategory: [] }),
+      'PEN',
+    );
+    expect(result).toContain('Sin gastos registrados.');
+  });
+
+  it('formats USD currency', () => {
+    const result = formatMonthlyClosing(makeMonthlyClosingData({ total: 500, byCategory: [
+      { slug: 'food', name: 'Food', icon: '🍽', total: 500 },
+    ], previousMonthTotal: 0 }), 'USD');
+    expect(result).toContain('$500.00');
+  });
+
+  it('snapshot: full monthly closing', () => {
+    expect(formatMonthlyClosing(makeMonthlyClosingData(), 'PEN')).toMatchInlineSnapshot(`
+      "📊 Cierre Febrero 2026
+      Total: S/1,850.00
+      📈 +23% vs mes anterior
+
+      🍽 Food & Dining  S/850.00 (46%)
+      🚗 Transport  S/450.00 (24%)
+      🛒 Groceries  S/350.00 (19%)
+      🎬 Entertainment  S/200.00 (11%)"
+    `);
+  });
+
+  it('snapshot: monthly closing with decrease', () => {
+    expect(formatMonthlyClosing(
+      makeMonthlyClosingData({ total: 1200, previousMonthTotal: 1500 }),
+      'PEN',
+    )).toMatchInlineSnapshot(`
+      "📊 Cierre Febrero 2026
+      Total: S/1,200.00
+      📉 -20% vs mes anterior
+
+      🍽 Food & Dining  S/850.00 (71%)
+      🚗 Transport  S/450.00 (38%)
+      🛒 Groceries  S/350.00 (29%)
+      🎬 Entertainment  S/200.00 (17%)"
+    `);
+  });
+
+  it('snapshot: empty month', () => {
+    expect(formatMonthlyClosing(
+      makeMonthlyClosingData({ total: 0, byCategory: [], previousMonthTotal: 0 }),
+      'PEN',
+    )).toMatchInlineSnapshot(`
+      "📊 Cierre Febrero 2026
+      Total: S/0.00
+
+      Sin gastos registrados."
+    `);
+  });
+
+  it('snapshot: no previous month data', () => {
+    expect(formatMonthlyClosing(
+      makeMonthlyClosingData({ previousMonthTotal: 0 }),
+      'PEN',
+    )).toMatchInlineSnapshot(`
+      "📊 Cierre Febrero 2026
+      Total: S/1,850.00
+
+      🍽 Food & Dining  S/850.00 (46%)
+      🚗 Transport  S/450.00 (24%)
+      🛒 Groceries  S/350.00 (19%)
+      🎬 Entertainment  S/200.00 (11%)"
+    `);
   });
 });

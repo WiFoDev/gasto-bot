@@ -61,6 +61,7 @@ import {
   getExpensesTotal,
   getDateRange,
   getExpensesSummary,
+  getMonthlyClosingData,
 } from '../../src/db.js';
 import { getState, setState, clearState } from '../../src/state.js';
 import { formatHelp, formatError, formatUnknown, formatParseError, formatDatabaseError, formatNoExpenseToModify, formatReceiptUnclear, formatUnknownUser, formatExpenseCancelled, formatMerchantCorrection, formatCorrectionGeneric } from '../../src/formatter.js';
@@ -72,6 +73,7 @@ import type {
   ParseResult,
   PendingExpense,
   ReceiptResult,
+  MonthlyClosingData,
 } from '../../src/types.js';
 
 // ── Test Helpers ────────────────────────────────────────────────────
@@ -208,6 +210,7 @@ const mockedParseMessage = parseMessage as ReturnType<typeof vi.fn>;
 const mockedUpsertBudget = upsertBudget as ReturnType<typeof vi.fn>;
 const mockedGetBudget = getBudget as ReturnType<typeof vi.fn>;
 const mockedGetExpensesTotal = getExpensesTotal as ReturnType<typeof vi.fn>;
+const mockedGetMonthlyClosingData = getMonthlyClosingData as ReturnType<typeof vi.fn>;
 const mockedParseReceipt = parseReceipt as ReturnType<typeof vi.fn>;
 const mockedDownloadImage = downloadImage as ReturnType<typeof vi.fn>;
 const mockedUploadImage = uploadImage as ReturnType<typeof vi.fn>;
@@ -2337,6 +2340,97 @@ describe('handleMessage', () => {
 
       expect(result).toContain('⚠️');
       expect(result).toContain('85%');
+    });
+  });
+
+  // ── Monthly Closing ──────────────────────────────────────────────────
+
+  describe('monthly_closing intent', () => {
+    const mockClosingData: MonthlyClosingData = {
+      year: 2026,
+      month: 2,
+      total: 1850,
+      byCategory: [
+        { slug: 'food_dining', name: 'Food & Dining', icon: '🍽', total: 850 },
+        { slug: 'transport', name: 'Transport', icon: '🚗', total: 450 },
+        { slug: 'groceries', name: 'Groceries', icon: '🛒', total: 350 },
+      ],
+      previousMonthTotal: 1500,
+      budgets: [],
+    };
+
+    it('routes monthly_closing intent and returns formatted closing', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'monthly_closing', target_month: 2, target_year: 2026 }),
+      );
+      mockedGetMonthlyClosingData.mockResolvedValue(mockClosingData);
+
+      const result = await handleMessage(PHONE, 'text', 'cierra febrero');
+
+      expect(mockedGetMonthlyClosingData).toHaveBeenCalledWith('user-1', 2026, 2);
+      expect(result).toContain('Cierre Febrero 2026');
+      expect(result).toContain('S/1,850.00');
+      expect(result).toContain('Food & Dining');
+    });
+
+    it('defaults to current month when target_month/year are null', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'monthly_closing', target_month: null, target_year: null }),
+      );
+      mockedGetMonthlyClosingData.mockResolvedValue({
+        ...mockClosingData,
+        month: 3,
+        year: 2026,
+      });
+
+      const result = await handleMessage(PHONE, 'text', 'cierre del mes');
+
+      // Should have been called — exact month depends on runtime date, but verify the call happened
+      expect(mockedGetMonthlyClosingData).toHaveBeenCalledTimes(1);
+      expect(result).toContain('Cierre');
+    });
+
+    it('shows previous month comparison with increase', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'monthly_closing', target_month: 2, target_year: 2026 }),
+      );
+      mockedGetMonthlyClosingData.mockResolvedValue(mockClosingData);
+
+      const result = await handleMessage(PHONE, 'text', 'cierra febrero');
+
+      expect(result).toContain('📈');
+      expect(result).toContain('+23%');
+      expect(result).toContain('vs mes anterior');
+    });
+
+    it('shows empty month message when no expenses', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'monthly_closing', target_month: 1, target_year: 2026 }),
+      );
+      mockedGetMonthlyClosingData.mockResolvedValue({
+        ...mockClosingData,
+        month: 1,
+        total: 0,
+        byCategory: [],
+        previousMonthTotal: 0,
+      });
+
+      const result = await handleMessage(PHONE, 'text', 'cierra enero');
+
+      expect(result).toContain('Sin gastos registrados.');
+    });
+
+    it('shows category percentages in closing', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'monthly_closing', target_month: 2, target_year: 2026 }),
+      );
+      mockedGetMonthlyClosingData.mockResolvedValue(mockClosingData);
+
+      const result = await handleMessage(PHONE, 'text', 'cierra febrero');
+
+      expect(result).toContain('46%');
+      expect(result).toContain('24%');
+      expect(result).toContain('19%');
     });
   });
 });
