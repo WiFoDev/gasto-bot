@@ -147,6 +147,24 @@ function evaluateFixture(fixture: MessageFixture, result: ParseResult): Check[] 
     });
   }
 
+  if (exp.target_month !== undefined) {
+    checks.push({
+      field: 'target_month',
+      passed: result.target_month === exp.target_month,
+      expected: exp.target_month,
+      actual: result.target_month,
+    });
+  }
+
+  if (exp.target_year !== undefined) {
+    checks.push({
+      field: 'target_year',
+      passed: result.target_year === exp.target_year,
+      expected: exp.target_year,
+      actual: result.target_year,
+    });
+  }
+
   return checks;
 }
 

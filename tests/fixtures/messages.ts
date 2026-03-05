@@ -15,6 +15,8 @@ export interface MessageFixture {
     correction_field?: 'category' | 'amount' | 'merchant';
     payment_type?: PaymentType;
     payment_method_name?: string;
+    target_month?: number;
+    target_year?: number;
   };
 }
 
@@ -307,5 +309,32 @@ export const MESSAGE_FIXTURES: MessageFixture[] = [
     input: 'list categories',
     label: 'list categories English',
     expected: { intent: 'list_categories' },
+  },
+
+  // ── Monthly closing ──────────────────────────────────────────────
+  {
+    input: 'cierra febrero',
+    label: 'monthly closing February',
+    expected: { intent: 'monthly_closing', target_month: 2, target_year: 2026 },
+  },
+  {
+    input: 'cierre del mes',
+    label: 'monthly closing current month',
+    expected: { intent: 'monthly_closing', target_month: 3, target_year: 2026 },
+  },
+  {
+    input: 'resumen mensual enero',
+    label: 'monthly closing January',
+    expected: { intent: 'monthly_closing', target_month: 1, target_year: 2026 },
+  },
+  {
+    input: 'cierre marzo 2026',
+    label: 'monthly closing with year',
+    expected: { intent: 'monthly_closing', target_month: 3, target_year: 2026 },
+  },
+  {
+    input: 'monthly closing february',
+    label: 'monthly closing English',
+    expected: { intent: 'monthly_closing', target_month: 2, target_year: 2026 },
   },
 ];

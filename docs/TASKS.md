@@ -107,7 +107,7 @@
   - Unit tests for handler routing and formatter output (inline snapshots)
   - Depends on: TASK-47, TASK-48
 
-- [ ] TASK-50: Integration parse fixtures for monthly closing
+- [x] TASK-50: Integration parse fixtures for monthly closing
   - Add ~5 fixtures: "cierra febrero", "cierre del mes", "resumen mensual"
   - Verify correct month/year extraction
   - Depends on: TASK-47
