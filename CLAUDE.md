@@ -25,6 +25,7 @@
 - All TypeScript interfaces in `src/types.ts` — every cross-module shape lives here
 - System prompts in `src/prompts/*.ts` as exported template string functions
 - Supabase accessed via JS client only — no REST API layer
+- Categories are dynamic and user-driven — AI suggests new categories when no existing one fits, user confirms to create
 - Conversation state is in-memory `Map` with TTL expiry — not persisted
 - Pure functions for formatting (`formatter.ts`) — no side effects
 - `console.log(JSON.stringify(...))` for logging — no logging libraries
@@ -35,7 +36,7 @@
 - `src/index.ts` — Fastify server, route registration, graceful shutdown
 - `src/config.ts` — env validation, constants (thresholds, TTL, timezone)
 - `src/webhook.ts` — POST /webhook (Kapso payload), GET /health
-- `src/handler.ts` — core orchestrator: state check → parse → route intent → respond
+- `src/handler.ts` — core orchestrator: state check → parse → route intent → respond. Intents: `log_expense`, `query_summary`, `query_budget`, `set_budget`, `correct_expense`, `delete_expense`, `list_categories`, `help`
 - `src/parse.ts` — single Claude Sonnet call per message (intent + extract + categorize)
 - `src/parse-image.ts` — Claude Vision call for receipts
 - `src/db.ts` — Supabase client + 16 query functions
@@ -47,9 +48,9 @@
 - `seed.sql` — default user + 9 categories
 
 ## Testing (CRITICAL)
-- **Unit** (`tests/unit/`, 11 files, 298 tests): Mock external deps via hoisted `vi.mock()`. Test orchestration logic, not library wrappers. Uses inline snapshots for formatter output.
+- **Unit** (`tests/unit/`, 11 files, 311 tests): Mock external deps via hoisted `vi.mock()`. Test orchestration logic, not library wrappers. Uses inline snapshots for formatter output.
 - **Integration** (`tests/integration/`, 5 files): Real Claude + Supabase API calls. Excluded from `npm run test` by vitest config. Run manually with `npm run test:integration`.
-- **Validation gates**: Text parse ≥ 85% accuracy (GATE #1, currently 100%). Receipt parse ≥ 70% accuracy (GATE #2).
+- **Validation gates**: Text parse ≥ 85% accuracy (GATE #1, currently 100%). Receipt parse ≥ 70% accuracy (GATE #2). Integration parse with payment/category fixtures ≥ 85% accuracy (GATE #3, currently 97.9%).
 - **E2E**: Manual WhatsApp testing on real phone. No automated E2E framework.
 - **IMPORTANT**: If tests fail, fix the CODE, not the tests. Tests define correctness.
 - **YOU MUST** run `npm run test` before every commit.

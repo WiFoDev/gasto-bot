@@ -68,7 +68,7 @@
   - **Gate blocks Phase 2**
   - Depends on: TASK-40, TASK-41
 
-- [ ] TASK-45: Update CLAUDE.md for Phase 1
+- [x] TASK-45: Update CLAUDE.md for Phase 1
   - Add `src/utils.ts` to architecture section
   - Update intent list to include `list_categories`
   - Add note about dynamic user-driven categories
