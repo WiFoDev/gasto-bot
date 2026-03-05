@@ -111,10 +111,46 @@ function evaluateFixture(fixture: MessageFixture, result: ParseResult): Check[] 
     });
   }
 
+  if (exp.category_slug_null === true) {
+    checks.push({
+      field: 'category_slug_null',
+      passed: result.category_slug === null,
+      expected: null,
+      actual: result.category_slug,
+    });
+  }
+
+  if (exp.suggested_category_name !== undefined) {
+    checks.push({
+      field: 'suggested_category_name',
+      passed: result.suggested_category_name === exp.suggested_category_name,
+      expected: exp.suggested_category_name,
+      actual: result.suggested_category_name,
+    });
+  }
+
+  if (exp.payment_type !== undefined) {
+    checks.push({
+      field: 'payment_type',
+      passed: result.payment_type === exp.payment_type,
+      expected: exp.payment_type,
+      actual: result.payment_type,
+    });
+  }
+
+  if (exp.payment_method_name !== undefined) {
+    checks.push({
+      field: 'payment_method_name',
+      passed: result.payment_method_name === exp.payment_method_name,
+      expected: exp.payment_method_name,
+      actual: result.payment_method_name,
+    });
+  }
+
   return checks;
 }
 
-describe('parse accuracy validation (GATE #1)', () => {
+describe('parse accuracy validation (GATE #3)', () => {
   const allResults: FixtureResult[] = [];
 
   for (const fixture of MESSAGE_FIXTURES) {

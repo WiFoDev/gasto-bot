@@ -62,7 +62,7 @@
   - Unit tests: ~10 new tests for state transitions, category creation, payment flow
   - Depends on: TASK-38, TASK-39, TASK-41, TASK-42
 
-- [ ] TASK-44: Integration parse accuracy gate with new fixtures — 🚧 GATE #3
+- [x] TASK-44: Integration parse accuracy gate with new fixtures — 🚧 GATE #3
   - Add ~15 fixtures to `tests/fixtures/messages.ts`: payment methods ("almuerzo 35 con yape"), new category suggestions ("veterinario 120"), list_categories ("mis categorias")
   - Run `npm run test:integration` — parse accuracy must be >= 85%
   - **Gate blocks Phase 2**

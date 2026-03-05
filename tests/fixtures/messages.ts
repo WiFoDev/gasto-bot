@@ -1,4 +1,4 @@
-import type { Intent } from '../../src/types.js';
+import type { Intent, PaymentType } from '../../src/types.js';
 
 export interface MessageFixture {
   input: string;
@@ -8,8 +8,13 @@ export interface MessageFixture {
     amount?: number;
     currency?: string;
     category_slug?: string;
+    /** null means expect no existing category (new category suggestion) */
+    category_slug_null?: true;
+    suggested_category_name?: string;
     period?: 'today' | 'week' | 'month';
     correction_field?: 'category' | 'amount' | 'merchant';
+    payment_type?: PaymentType;
+    payment_method_name?: string;
   };
 }
 
@@ -221,5 +226,86 @@ export const MESSAGE_FIXTURES: MessageFixture[] = [
     input: 'jajaja que risa',
     label: 'casual chat → unknown',
     expected: { intent: 'unknown' },
+  },
+
+  // ── Payment methods ────────────────────────────────────────────
+  {
+    input: 'almuerzo 35 con yape',
+    label: 'meal paid with Yape',
+    expected: { intent: 'log_expense', amount: 35, category_slug: 'food_dining', payment_type: 'digital_wallet', payment_method_name: 'Yape' },
+  },
+  {
+    input: 'taxi 20 con plin',
+    label: 'taxi paid with Plin',
+    expected: { intent: 'log_expense', amount: 20, category_slug: 'transport', payment_type: 'digital_wallet', payment_method_name: 'Plin' },
+  },
+  {
+    input: 'supermercado 150 tarjeta',
+    label: 'groceries with card',
+    expected: { intent: 'log_expense', amount: 150, category_slug: 'groceries', payment_type: 'credit_card' },
+  },
+  {
+    input: 'cena 80 efectivo',
+    label: 'dinner cash',
+    expected: { intent: 'log_expense', amount: 80, category_slug: 'food_dining', payment_type: 'cash' },
+  },
+  {
+    input: 'uber 25 tarjeta de debito',
+    label: 'uber debit card',
+    expected: { intent: 'log_expense', amount: 25, category_slug: 'transport', payment_type: 'debit_card' },
+  },
+  {
+    input: 'netflix 45 tarjeta de credito',
+    label: 'netflix credit card',
+    expected: { intent: 'log_expense', amount: 45, category_slug: 'entertainment', payment_type: 'credit_card' },
+  },
+  {
+    input: 'transferencia 200 al gym',
+    label: 'bank transfer to gym',
+    expected: { intent: 'log_expense', amount: 200, payment_type: 'bank_transfer' },
+  },
+
+  // ── New category suggestions ───────────────────────────────────
+  {
+    input: 'veterinario 120',
+    label: 'vet → suggest new category',
+    expected: { intent: 'log_expense', amount: 120, category_slug_null: true },
+  },
+  {
+    input: 'peluqueria 60',
+    label: 'haircut → suggest new category',
+    expected: { intent: 'log_expense', amount: 60, category_slug_null: true },
+  },
+  {
+    input: 'lavanderia 25',
+    label: 'laundry → suggest new category',
+    expected: { intent: 'log_expense', amount: 25, category_slug_null: true },
+  },
+  {
+    input: 'comida para el perro 85',
+    label: 'dog food → suggest new category',
+    expected: { intent: 'log_expense', amount: 85, category_slug_null: true },
+  },
+
+  // ── List categories ────────────────────────────────────────────
+  {
+    input: 'mis categorias',
+    label: 'list categories Spanish',
+    expected: { intent: 'list_categories' },
+  },
+  {
+    input: 'que categorias tengo?',
+    label: 'list categories question',
+    expected: { intent: 'list_categories' },
+  },
+  {
+    input: 'categorias',
+    label: 'list categories single word',
+    expected: { intent: 'list_categories' },
+  },
+  {
+    input: 'list categories',
+    label: 'list categories English',
+    expected: { intent: 'list_categories' },
   },
 ];
