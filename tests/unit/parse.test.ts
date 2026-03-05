@@ -22,9 +22,9 @@ vi.mock('../../src/config.js', () => ({
 import { parseMessage } from '../../src/parse.js';
 
 const TEST_CATEGORIES: Category[] = [
-  { id: '1', user_id: 'u1', name: 'Food & Dining', slug: 'food_dining', icon: '🍽', is_default: true },
-  { id: '2', user_id: 'u1', name: 'Transport', slug: 'transport', icon: '🚗', is_default: true },
-  { id: '3', user_id: 'u1', name: 'Groceries', slug: 'groceries', icon: '🛒', is_default: true },
+  { id: '1', user_id: 'u1', name: 'Food & Dining', slug: 'food_dining', icon: '🍽', is_default: true, created_at: '2026-01-01T00:00:00Z' },
+  { id: '2', user_id: 'u1', name: 'Transport', slug: 'transport', icon: '🚗', is_default: true, created_at: '2026-01-01T00:00:00Z' },
+  { id: '3', user_id: 'u1', name: 'Groceries', slug: 'groceries', icon: '🛒', is_default: true, created_at: '2026-01-01T00:00:00Z' },
 ];
 
 describe('parseMessage', () => {
@@ -44,6 +44,9 @@ describe('parseMessage', () => {
       date: '2026-02-26',
       period: null,
       correction_field: null,
+      suggested_category_name: null,
+      payment_type: null,
+      payment_method_name: null,
       error_message: null,
     };
 
@@ -71,6 +74,9 @@ describe('parseMessage', () => {
       date: null,
       period: null,
       correction_field: null,
+      suggested_category_name: null,
+      payment_type: null,
+      payment_method_name: null,
       error_message: null,
     };
 
@@ -96,6 +102,9 @@ describe('parseMessage', () => {
       date: null,
       period: 'week',
       correction_field: null,
+      suggested_category_name: null,
+      payment_type: null,
+      payment_method_name: null,
       error_message: null,
     };
 
@@ -154,6 +163,9 @@ describe('parseMessage', () => {
       date: '2026-02-26',
       period: null,
       correction_field: null,
+      suggested_category_name: null,
+      payment_type: null,
+      payment_method_name: null,
       error_message: null,
     };
 
@@ -191,6 +203,9 @@ describe('parseMessage', () => {
       date: null,
       period: null,
       correction_field: null,
+      suggested_category_name: null,
+      payment_type: null,
+      payment_method_name: null,
       error_message: null,
     };
 

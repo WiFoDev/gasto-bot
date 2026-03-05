@@ -30,15 +30,15 @@ const VALID_SLUGS = [
 ];
 
 const CATEGORIES: Category[] = [
-  { id: '1', user_id: 'u1', name: 'Food & Dining', slug: 'food_dining', icon: '🍽', is_default: true },
-  { id: '2', user_id: 'u1', name: 'Transport', slug: 'transport', icon: '🚗', is_default: true },
-  { id: '3', user_id: 'u1', name: 'Groceries', slug: 'groceries', icon: '🛒', is_default: true },
-  { id: '4', user_id: 'u1', name: 'Entertainment', slug: 'entertainment', icon: '🎬', is_default: true },
-  { id: '5', user_id: 'u1', name: 'Health', slug: 'health', icon: '💊', is_default: true },
-  { id: '6', user_id: 'u1', name: 'Shopping', slug: 'shopping', icon: '🛍', is_default: true },
-  { id: '7', user_id: 'u1', name: 'Bills & Utilities', slug: 'bills_utilities', icon: '💡', is_default: true },
-  { id: '8', user_id: 'u1', name: 'Education', slug: 'education', icon: '📚', is_default: true },
-  { id: '9', user_id: 'u1', name: 'Other', slug: 'other', icon: '📌', is_default: true },
+  { id: '1', user_id: 'u1', name: 'Food & Dining', slug: 'food_dining', icon: '🍽', is_default: true, created_at: '2026-01-01T00:00:00Z' },
+  { id: '2', user_id: 'u1', name: 'Transport', slug: 'transport', icon: '🚗', is_default: true, created_at: '2026-01-01T00:00:00Z' },
+  { id: '3', user_id: 'u1', name: 'Groceries', slug: 'groceries', icon: '🛒', is_default: true, created_at: '2026-01-01T00:00:00Z' },
+  { id: '4', user_id: 'u1', name: 'Entertainment', slug: 'entertainment', icon: '🎬', is_default: true, created_at: '2026-01-01T00:00:00Z' },
+  { id: '5', user_id: 'u1', name: 'Health', slug: 'health', icon: '💊', is_default: true, created_at: '2026-01-01T00:00:00Z' },
+  { id: '6', user_id: 'u1', name: 'Shopping', slug: 'shopping', icon: '🛍', is_default: true, created_at: '2026-01-01T00:00:00Z' },
+  { id: '7', user_id: 'u1', name: 'Bills & Utilities', slug: 'bills_utilities', icon: '💡', is_default: true, created_at: '2026-01-01T00:00:00Z' },
+  { id: '8', user_id: 'u1', name: 'Education', slug: 'education', icon: '📚', is_default: true, created_at: '2026-01-01T00:00:00Z' },
+  { id: '9', user_id: 'u1', name: 'Other', slug: 'other', icon: '📌', is_default: true, created_at: '2026-01-01T00:00:00Z' },
 ];
 
 const TODAY = '2026-02-26';

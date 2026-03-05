@@ -17,6 +17,9 @@ function makeErrorResult(message: string): ParseResult {
     date: null,
     period: null,
     correction_field: null,
+    suggested_category_name: null,
+    payment_type: null,
+    payment_method_name: null,
     error_message: message,
   };
 }

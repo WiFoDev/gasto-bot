@@ -13,6 +13,7 @@ const makePendingExpense = (overrides?: Partial<PendingExpense>): PendingExpense
   amount: 35,
   currency: 'PEN',
   category_slug: 'food_dining',
+  suggested_category_name: null,
   description: 'almuerzo',
   merchant: null,
   date: '2026-02-27',
@@ -20,6 +21,8 @@ const makePendingExpense = (overrides?: Partial<PendingExpense>): PendingExpense
   raw_input: 'almuerzo 35 soles',
   image_url: null,
   ai_confidence: 0.95,
+  payment_type: null,
+  payment_method_name: null,
   ...overrides,
 });
 

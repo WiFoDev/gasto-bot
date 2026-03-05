@@ -19,7 +19,7 @@
 >
 > **Source**: `ideal-bot-state/financial-advisor.skill`
 
-- [ ] TASK-37: Migration + types for dynamic categories and payment methods
+- [x] TASK-37: Migration + types for dynamic categories and payment methods
   - Create `migrations/002_dynamic_categories_payment.sql`: add `payment_type` (enum) + `payment_method_name` (text) to expenses, add `created_at` to categories
   - Update `src/types.ts`: add payment fields to `Expense`, `ParseResult`, `PendingExpense`. Add `suggested_category_name` to `ParseResult`/`PendingExpense`. Add `list_categories` intent. Add `awaiting_category_confirmation` to `LastAction`
   - Type-check with `npx tsc --noEmit`

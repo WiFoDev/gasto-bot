@@ -137,6 +137,8 @@ async function resolveAndInsertExpense(
     raw_input: pending.raw_input,
     image_url: pending.image_url,
     ai_confidence: pending.ai_confidence,
+    payment_type: pending.payment_type,
+    payment_method_name: pending.payment_method_name,
   });
 
   console.log(JSON.stringify({
@@ -266,6 +268,7 @@ async function handleLogExpense(
     amount: result.amount ?? 0,
     currency: result.currency ?? user.currency,
     category_slug: result.category_slug,
+    suggested_category_name: result.suggested_category_name,
     description: result.description,
     merchant: result.merchant,
     date: result.date ?? today,
@@ -273,6 +276,8 @@ async function handleLogExpense(
     raw_input: rawInput,
     image_url: null,
     ai_confidence: result.confidence,
+    payment_type: result.payment_type,
+    payment_method_name: result.payment_method_name,
   };
 
   // If category is unknown/other, ask for clarification regardless of confidence
@@ -478,6 +483,7 @@ async function handleImageMessage(
     amount: receipt.amount ?? 0,
     currency: receipt.currency ?? user.currency,
     category_slug: null,
+    suggested_category_name: null,
     description: null,
     merchant: receipt.merchant,
     date: receipt.date ?? today,
@@ -485,6 +491,8 @@ async function handleImageMessage(
     raw_input: mediaUrl,
     image_url: imageUrl,
     ai_confidence: receipt.confidence,
+    payment_type: null,
+    payment_method_name: null,
   };
 
   // 4. High confidence with valid amount — ask for confirmation

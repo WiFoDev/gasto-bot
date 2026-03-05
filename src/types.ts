@@ -16,6 +16,7 @@ export interface Category {
   slug: string;
   icon: string;
   is_default: boolean;
+  created_at: string;
 }
 
 export interface Expense {
@@ -31,6 +32,8 @@ export interface Expense {
   raw_input: string;
   image_url: string | null;
   ai_confidence: number;
+  payment_type: PaymentType | null;
+  payment_method_name: string | null;
   deleted_at: string | null;
   created_at: string;
 }
@@ -46,6 +49,8 @@ export interface Budget {
   created_at: string;
 }
 
+export type PaymentType = 'cash' | 'credit_card' | 'debit_card' | 'digital_wallet' | 'bank_transfer' | 'other';
+
 // ── AI Parsing ────────────────────────────────────────────────────
 
 export type Intent =
@@ -55,6 +60,7 @@ export type Intent =
   | 'query_budget'
   | 'correct_expense'
   | 'delete_expense'
+  | 'list_categories'
   | 'help'
   | 'unknown'
   | 'error';
@@ -70,6 +76,9 @@ export interface ParseResult {
   date: string | null;
   period: 'today' | 'week' | 'month' | null;
   correction_field: 'category' | 'amount' | 'merchant' | null;
+  suggested_category_name: string | null;
+  payment_type: PaymentType | null;
+  payment_method_name: string | null;
   error_message: string | null;
 }
 
@@ -97,6 +106,7 @@ export interface ParseContext {
 export type LastAction =
   | 'awaiting_description'
   | 'awaiting_confirmation'
+  | 'awaiting_category_confirmation'
   | 'expense_logged'
   | 'none';
 
@@ -104,6 +114,7 @@ export interface PendingExpense {
   amount: number;
   currency: string;
   category_slug: string | null;
+  suggested_category_name: string | null;
   description: string | null;
   merchant: string | null;
   date: string;
@@ -111,6 +122,8 @@ export interface PendingExpense {
   raw_input: string;
   image_url: string | null;
   ai_confidence: number;
+  payment_type: PaymentType | null;
+  payment_method_name: string | null;
 }
 
 export interface ConversationState {

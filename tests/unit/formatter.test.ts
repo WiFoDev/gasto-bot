@@ -41,6 +41,8 @@ function makeExpense(overrides: Partial<Expense> = {}): Expense {
     raw_input: 'almuerzo 35 soles',
     image_url: null,
     ai_confidence: 0.95,
+    payment_type: null,
+    payment_method_name: null,
     deleted_at: null,
     created_at: '2026-02-25T12:00:00Z',
     ...overrides,
@@ -55,6 +57,7 @@ function makeCategory(overrides: Partial<Category> = {}): Category {
     slug: 'food_dining',
     icon: '🍽',
     is_default: true,
+    created_at: '2026-01-01T00:00:00Z',
     ...overrides,
   };
 }
@@ -66,6 +69,7 @@ function makePendingExpense(
     amount: 50,
     currency: 'PEN',
     category_slug: null,
+    suggested_category_name: null,
     description: null,
     merchant: null,
     date: '2026-02-25',
@@ -73,6 +77,8 @@ function makePendingExpense(
     raw_input: 'spent 50',
     image_url: null,
     ai_confidence: 0.7,
+    payment_type: null,
+    payment_method_name: null,
     ...overrides,
   };
 }

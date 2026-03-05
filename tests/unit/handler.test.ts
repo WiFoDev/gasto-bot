@@ -91,6 +91,7 @@ const mockCategories: Category[] = [
     slug: 'food_dining',
     icon: '🍽',
     is_default: true,
+    created_at: '2026-01-01T00:00:00Z',
   },
   {
     id: 'cat-transport',
@@ -99,6 +100,7 @@ const mockCategories: Category[] = [
     slug: 'transport',
     icon: '🚗',
     is_default: true,
+    created_at: '2026-01-01T00:00:00Z',
   },
   {
     id: 'cat-groceries',
@@ -107,6 +109,7 @@ const mockCategories: Category[] = [
     slug: 'groceries',
     icon: '🛒',
     is_default: true,
+    created_at: '2026-01-01T00:00:00Z',
   },
   {
     id: 'cat-other',
@@ -115,6 +118,7 @@ const mockCategories: Category[] = [
     slug: 'other',
     icon: '📦',
     is_default: true,
+    created_at: '2026-01-01T00:00:00Z',
   },
 ];
 
@@ -130,6 +134,9 @@ function makeParseResult(overrides: Partial<ParseResult> = {}): ParseResult {
     date: '2026-02-27',
     period: null,
     correction_field: null,
+    suggested_category_name: null,
+    payment_type: null,
+    payment_method_name: null,
     error_message: null,
     ...overrides,
   };
@@ -149,6 +156,8 @@ function makeExpense(overrides: Partial<Expense> = {}): Expense {
     raw_input: 'almuerzo 35 soles',
     image_url: null,
     ai_confidence: 0.95,
+    payment_type: null,
+    payment_method_name: null,
     deleted_at: null,
     created_at: '2026-02-27T12:00:00Z',
     ...overrides,
@@ -162,6 +171,7 @@ function makePendingExpense(
     amount: 35,
     currency: 'PEN',
     category_slug: 'food_dining',
+    suggested_category_name: null,
     description: 'almuerzo',
     merchant: null,
     date: '2026-02-27',
@@ -169,6 +179,8 @@ function makePendingExpense(
     raw_input: 'almuerzo 35 soles',
     image_url: null,
     ai_confidence: 0.9,
+    payment_type: null,
+    payment_method_name: null,
     ...overrides,
   };
 }
