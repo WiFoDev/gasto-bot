@@ -26,6 +26,7 @@ Classify the message into exactly ONE intent:
 - "query_budget" — User is asking about their budget status. Examples: "how's my food budget?", "como va mi presupuesto?", "budget status".
 - "correct_expense" — User is correcting the LAST logged expense. Examples: "wrong, it's transport", "no, it was 40", "actually that was groceries", "corrije, fue transporte".
 - "delete_expense" — User wants to delete the last logged expense. Examples: "delete that", "borra eso", "undo", "quita el ultimo", "cancel that".
+- "list_categories" — User wants to see their available categories. Examples: "mis categorias", "categorias", "que categorias tengo?", "my categories", "list categories".
 - "help" — User is asking for help or how to use the bot. Examples: "help", "ayuda", "how does this work?", "que puedo hacer?", "commands".
 - "unknown" — Message does not match any of the above intents. Gibberish, greetings without expense context, unrelated questions.
 
@@ -34,19 +35,21 @@ Classify the message into exactly ONE intent:
 For "log_expense":
 - "amount" (required): The numeric amount. Extract the number even if written informally ("treinta" → 30 is NOT supported, only numeric). If no clear number is present, set intent to "unknown" instead.
 - "currency": Default "PEN". Use "USD" if the message contains "dollars", "dolares", "usd", or uses "$" explicitly. "soles" or "s/" means "PEN".
-- "category_slug": Match to the closest valid category from the list above. Use context clues:
-  - Food/meals/restaurants/almuerzo/cena/desayuno/cafe → "food_dining"
-  - Taxi/uber/bus/gasolina/gas/parking/estacionamiento → "transport"
-  - Supermarket names (Wong, Plaza Vea, Metro, Tottus, Vivanda)/mercado/groceries → "groceries"
-  - Movies/Netflix/Spotify/games/concerts/salida → "entertainment"
-  - Medicine/pharmacy/doctor/dentist/farmacia/consulta → "health"
-  - Clothes/shoes/Amazon/Falabella/Ripley/compras → "shopping"
-  - Electricity/water/internet/phone bill/luz/agua/telefono → "bills_utilities"
-  - Books/courses/tuition/Udemy/Platzi/universidad → "education"
-  - If no category can be inferred → "other"
+- "category_slug": Match to the closest valid category from the list above. Use context clues to match expenses to existing categories. If the expense clearly does NOT fit any of the categories listed above, set "category_slug" to null and set "suggested_category_name" to a short, human-readable name for the new category (in the user's language, e.g., "Mascotas", "Gym & Fitness", "Suscripciones"). Do NOT default to "other" when a better new category could be suggested.
+  - Only use "other" when the expense is too vague to suggest a meaningful category (e.g., "50 soles" with no context).
+  - If a clear new category fits, prefer suggesting it over using "other".
+- "suggested_category_name": A short, human-readable name for a new category when the expense doesn't fit any existing category. null when "category_slug" is set to an existing category.
 - "description": A short label for the expense. Use the merchant name if provided, otherwise summarize (e.g., "almuerzo" → "almuerzo", "uber to work" → "uber to work"). Keep original language.
 - "merchant": Specific business name if mentioned (e.g., "Wong", "Uber", "Plaza Vea"). null if not mentioned.
 - "date": ISO format "YYYY-MM-DD". Default to today (${today}) unless the message specifies otherwise. "yesterday"/"ayer" → subtract 1 day. "friday"/"viernes" → most recent past Friday. Only adjust if explicitly stated.
+- "payment_type": Extract payment method type if mentioned. Valid values: "cash", "credit_card", "debit_card", "digital_wallet", "bank_transfer", "other". null if not mentioned. Examples:
+  - "efectivo"/"cash" → "cash"
+  - "tarjeta de credito"/"credit card" → "credit_card"
+  - "tarjeta de debito"/"debit card" → "debit_card"
+  - "yape"/"plin"/"venmo"/"paypal" → "digital_wallet"
+  - "transferencia"/"transfer" → "bank_transfer"
+  - "tarjeta" alone (without specifying credit/debit) → "credit_card"
+- "payment_method_name": Specific payment method name if mentioned (e.g., "Yape", "Plin", "PayPal", "BCP", "BBVA"). null if not mentioned or if only a generic type was given (e.g., "efectivo" → null, "con yape" → "Yape").
 
 For "query_summary":
 - "period": "today", "week", or "month". Default to "month" if not specified. "hoy" → "today", "esta semana"/"this week" → "week", "este mes"/"this month" → "month".
@@ -69,6 +72,8 @@ For "correct_expense":
 - When correcting multiple fields at once (e.g., "no, it was Wong, groceries"), set ALL changed fields: correction_field to the primary field, plus fill merchant, category_slug, and/or amount as needed.
 
 For "delete_expense": No additional fields needed.
+
+For "list_categories": No additional fields needed.
 
 For "help": No additional fields needed.
 
@@ -98,11 +103,14 @@ Respond with ONLY a JSON object, no markdown, no explanation, no extra text:
   "amount": <number or null>,
   "currency": <string or null>,
   "category_slug": <string or null>,
+  "suggested_category_name": <string or null>,
   "description": <string or null>,
   "merchant": <string or null>,
   "date": <string or null>,
   "period": <"today" | "week" | "month" | null>,
   "correction_field": <"category" | "amount" | "merchant" | null>,
+  "payment_type": <"cash" | "credit_card" | "debit_card" | "digital_wallet" | "bank_transfer" | "other" | null>,
+  "payment_method_name": <string or null>,
   "error_message": <string or null>
 }
 

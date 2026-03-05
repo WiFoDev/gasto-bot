@@ -36,7 +36,7 @@
   - Rules: lowercase, spaces/special chars → underscore, remove accents, max 40 chars
   - Unit tests: "Gym & Fitness" → "gym_fitness", "Mascotas" → "mascotas", "Café/Snack" → "cafe_snack"
 
-- [ ] TASK-40: Update expense-parser prompt for open-ended categories + payment extraction
+- [x] TASK-40: Update expense-parser prompt for open-ended categories + payment extraction
   - Modify `src/prompts/expense-parser.ts`: instruct AI to suggest new categories when no fit (set `category_slug: null` + `suggested_category_name: "Name"`)
   - Add payment method extraction rules ("con yape" → digital_wallet/Yape, "tarjeta" → credit_card, "efectivo" → cash)
   - Add new fields to JSON output schema: `suggested_category_name`, `payment_type`, `payment_method_name`
