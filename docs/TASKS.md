@@ -42,7 +42,7 @@
   - Add new fields to JSON output schema: `suggested_category_name`, `payment_type`, `payment_method_name`
   - Depends on: TASK-37
 
-- [ ] TASK-41: Update parse.ts to map new fields + unit tests
+- [x] TASK-41: Update parse.ts to map new fields + unit tests
   - Map `suggested_category_name`, `payment_type`, `payment_method_name` from AI response
   - Update `tests/unit/parse.test.ts` with new JSON shape tests
   - Depends on: TASK-37, TASK-40

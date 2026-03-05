@@ -227,4 +227,143 @@ describe('parseMessage', () => {
       { role: 'user', content: 'hello world' },
     ]);
   });
+
+  it('maps payment_type and payment_method_name from AI response', async () => {
+    const apiResponse: ParseResult = {
+      intent: 'log_expense',
+      confidence: 0.95,
+      amount: 35,
+      currency: 'PEN',
+      category_slug: 'food_dining',
+      description: 'almuerzo',
+      merchant: null,
+      date: '2026-02-26',
+      period: null,
+      correction_field: null,
+      suggested_category_name: null,
+      payment_type: 'digital_wallet',
+      payment_method_name: 'Yape',
+      error_message: null,
+    };
+
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify(apiResponse) }],
+    });
+
+    const result = await parseMessage('almuerzo 35 con yape', TEST_CATEGORIES);
+
+    expect(result.payment_type).toBe('digital_wallet');
+    expect(result.payment_method_name).toBe('Yape');
+  });
+
+  it('maps suggested_category_name when category_slug is null', async () => {
+    const apiResponse: ParseResult = {
+      intent: 'log_expense',
+      confidence: 0.9,
+      amount: 120,
+      currency: 'PEN',
+      category_slug: null,
+      description: 'veterinario',
+      merchant: null,
+      date: '2026-02-26',
+      period: null,
+      correction_field: null,
+      suggested_category_name: 'Mascotas',
+      payment_type: null,
+      payment_method_name: null,
+      error_message: null,
+    };
+
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify(apiResponse) }],
+    });
+
+    const result = await parseMessage('veterinario 120', TEST_CATEGORIES);
+
+    expect(result.category_slug).toBeNull();
+    expect(result.suggested_category_name).toBe('Mascotas');
+  });
+
+  it('defaults new fields to null when AI omits them', async () => {
+    // Simulate an AI response missing the new fields
+    const partialResponse = {
+      intent: 'log_expense',
+      confidence: 0.9,
+      amount: 50,
+      currency: 'PEN',
+      category_slug: 'food_dining',
+      description: 'comida',
+      merchant: null,
+      date: '2026-02-26',
+      period: null,
+      correction_field: null,
+      error_message: null,
+      // Missing: suggested_category_name, payment_type, payment_method_name
+    };
+
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify(partialResponse) }],
+    });
+
+    const result = await parseMessage('comida 50', TEST_CATEGORIES);
+
+    expect(result.suggested_category_name).toBeNull();
+    expect(result.payment_type).toBeNull();
+    expect(result.payment_method_name).toBeNull();
+  });
+
+  it('maps expense with cash payment type and no method name', async () => {
+    const apiResponse: ParseResult = {
+      intent: 'log_expense',
+      confidence: 0.95,
+      amount: 20,
+      currency: 'PEN',
+      category_slug: 'transport',
+      description: 'taxi',
+      merchant: null,
+      date: '2026-02-26',
+      period: null,
+      correction_field: null,
+      suggested_category_name: null,
+      payment_type: 'cash',
+      payment_method_name: null,
+      error_message: null,
+    };
+
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify(apiResponse) }],
+    });
+
+    const result = await parseMessage('taxi 20 efectivo', TEST_CATEGORIES);
+
+    expect(result.payment_type).toBe('cash');
+    expect(result.payment_method_name).toBeNull();
+  });
+
+  it('maps list_categories intent', async () => {
+    const apiResponse: ParseResult = {
+      intent: 'list_categories',
+      confidence: 0.95,
+      amount: null,
+      currency: null,
+      category_slug: null,
+      description: null,
+      merchant: null,
+      date: null,
+      period: null,
+      correction_field: null,
+      suggested_category_name: null,
+      payment_type: null,
+      payment_method_name: null,
+      error_message: null,
+    };
+
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify(apiResponse) }],
+    });
+
+    const result = await parseMessage('mis categorias', TEST_CATEGORIES);
+
+    expect(result.intent).toBe('list_categories');
+  });
 });

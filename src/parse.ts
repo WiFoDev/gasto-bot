@@ -59,17 +59,34 @@ export async function parseMessage(
 
     const raw = response.content[0].text;
     const jsonStr = extractJson(raw);
-    const parsed = JSON.parse(jsonStr) as ParseResult;
+    const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
+
+    const result: ParseResult = {
+      intent: (parsed.intent as ParseResult['intent']) ?? 'error',
+      confidence: (parsed.confidence as number) ?? 0,
+      amount: (parsed.amount as number) ?? null,
+      currency: (parsed.currency as string) ?? null,
+      category_slug: (parsed.category_slug as string) ?? null,
+      description: (parsed.description as string) ?? null,
+      merchant: (parsed.merchant as string) ?? null,
+      date: (parsed.date as string) ?? null,
+      period: (parsed.period as ParseResult['period']) ?? null,
+      correction_field: (parsed.correction_field as ParseResult['correction_field']) ?? null,
+      suggested_category_name: (parsed.suggested_category_name as string) ?? null,
+      payment_type: (parsed.payment_type as ParseResult['payment_type']) ?? null,
+      payment_method_name: (parsed.payment_method_name as string) ?? null,
+      error_message: (parsed.error_message as string) ?? null,
+    };
 
     console.log(JSON.stringify({
       event: 'parse',
-      intent: parsed.intent,
-      confidence: parsed.confidence,
+      intent: result.intent,
+      confidence: result.confidence,
       latency_ms: Date.now() - startMs,
       timestamp: new Date().toISOString(),
     }));
 
-    return parsed;
+    return result;
   } catch (error) {
     console.log(JSON.stringify({
       event: 'parse',
