@@ -249,6 +249,31 @@ export function formatReceiptConfirmation(
   const amount = formatCurrency(pending.amount, pending.currency);
   let msg = `🧾 ${pending.merchant ?? 'Recibo'} — ${amount}`;
   msg += `\nCategoría: ${category.icon} ${category.name} · ${formatDate(pending.date)}`;
+
+  if (pending.items && pending.items.length > 0) {
+    const groups = new Map<string, { count: number; total: number }>();
+    for (const item of pending.items) {
+      const key = item.subcategory ?? 'otros';
+      const group = groups.get(key);
+      if (group) {
+        group.count += 1;
+        group.total += item.total;
+      } else {
+        groups.set(key, { count: 1, total: item.total });
+      }
+    }
+
+    const sorted = [...groups.entries()]
+      .sort((a, b) => b[1].total - a[1].total)
+      .slice(0, 5);
+
+    msg += '\n';
+    for (const [name, { count, total }] of sorted) {
+      msg += `\n  ${name} (${count})  ${formatCurrency(total, pending.currency)}`;
+    }
+    msg += '\n';
+  }
+
   msg += '\n¿Está bien?';
   return msg;
 }

@@ -142,7 +142,7 @@
   - Unit tests
   - Depends on: TASK-52, TASK-53
 
-- [ ] TASK-55: Formatter — receipt confirmation with item summary
+- [x] TASK-55: Formatter — receipt confirmation with item summary
   - Update `formatReceiptConfirmation()` to show items grouped by subcategory (top 5 groups)
   - If no items → existing format (backward compatible)
   - Inline snapshot tests

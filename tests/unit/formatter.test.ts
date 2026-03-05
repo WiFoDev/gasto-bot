@@ -28,7 +28,7 @@ import {
   formatCategoryList,
   formatMonthlyClosing,
 } from '../../src/formatter.js';
-import type { Expense, Category, PendingExpense, Budget, SummaryResult, MonthlyClosingData } from '../../src/types.js';
+import type { Expense, Category, PendingExpense, Budget, SummaryResult, MonthlyClosingData, ReceiptItemParsed } from '../../src/types.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -84,6 +84,7 @@ function makePendingExpense(
     ai_confidence: 0.7,
     payment_type: null,
     payment_method_name: null,
+    items: [],
     ...overrides,
   };
 }
@@ -789,6 +790,159 @@ describe('formatReceiptConfirmation', () => {
     expect(
       formatReceiptConfirmation(
         makePendingExpense({ amount: 45, merchant: null, source: 'image' }),
+        makeCategory(),
+      ),
+    ).toMatchInlineSnapshot(`
+      "🧾 Recibo — S/45.00
+      Categoría: 🍽 Food & Dining · 25 feb
+      ¿Está bien?"
+    `);
+  });
+});
+
+// ── formatReceiptConfirmation with items ──────────────────────────────
+
+function makeReceiptItems(): ReceiptItemParsed[] {
+  return [
+    { description: 'Leche Gloria', quantity: 2, unit_price: 6.5, total: 13.0, subcategory: 'lácteos' },
+    { description: 'Queso fresco', quantity: 1, unit_price: 8.0, total: 8.0, subcategory: 'lácteos' },
+    { description: 'Detergente Ace', quantity: 1, unit_price: 15.0, total: 15.0, subcategory: 'limpieza' },
+    { description: 'Lejía Clorox', quantity: 2, unit_price: 4.5, total: 9.0, subcategory: 'limpieza' },
+    { description: 'Pollo entero', quantity: 1, unit_price: 25.5, total: 25.5, subcategory: 'proteína' },
+    { description: 'Papas', quantity: 1, unit_price: 5.0, total: 5.0, subcategory: 'verdura' },
+    { description: 'Coca-Cola', quantity: 3, unit_price: 3.5, total: 10.5, subcategory: 'bebidas' },
+  ];
+}
+
+describe('formatReceiptConfirmation with items', () => {
+  it('shows item groups when items are present', () => {
+    const items = makeReceiptItems();
+    const result = formatReceiptConfirmation(
+      makePendingExpense({ amount: 86, merchant: 'Plaza Vea', source: 'image', items }),
+      makeCategory({ name: 'Groceries', icon: '🛒' }),
+    );
+    expect(result).toContain('proteína');
+    expect(result).toContain('limpieza');
+    expect(result).toContain('lácteos');
+    expect(result).toContain('¿Está bien?');
+  });
+
+  it('groups items by subcategory with count and total', () => {
+    const items = makeReceiptItems();
+    const result = formatReceiptConfirmation(
+      makePendingExpense({ amount: 86, merchant: 'Plaza Vea', source: 'image', items }),
+      makeCategory({ name: 'Groceries', icon: '🛒' }),
+    );
+    // lácteos: 2 items, S/21.00
+    expect(result).toContain('lácteos (2)');
+    expect(result).toContain('S/21.00');
+    // limpieza: 2 items, S/24.00
+    expect(result).toContain('limpieza (2)');
+    expect(result).toContain('S/24.00');
+  });
+
+  it('sorts groups by total descending', () => {
+    const items = makeReceiptItems();
+    const result = formatReceiptConfirmation(
+      makePendingExpense({ amount: 86, merchant: 'Plaza Vea', source: 'image', items }),
+      makeCategory({ name: 'Groceries', icon: '🛒' }),
+    );
+    const proteinaIdx = result.indexOf('proteína');
+    const limIndex = result.indexOf('limpieza');
+    const lacteosIdx = result.indexOf('lácteos');
+    // proteína (25.50) > limpieza (24.00) > lácteos (21.00)
+    expect(proteinaIdx).toBeLessThan(limIndex);
+    expect(limIndex).toBeLessThan(lacteosIdx);
+  });
+
+  it('limits to top 5 groups', () => {
+    const items: ReceiptItemParsed[] = [
+      { description: 'a', quantity: 1, unit_price: 10, total: 10, subcategory: 'grupo1' },
+      { description: 'b', quantity: 1, unit_price: 9, total: 9, subcategory: 'grupo2' },
+      { description: 'c', quantity: 1, unit_price: 8, total: 8, subcategory: 'grupo3' },
+      { description: 'd', quantity: 1, unit_price: 7, total: 7, subcategory: 'grupo4' },
+      { description: 'e', quantity: 1, unit_price: 6, total: 6, subcategory: 'grupo5' },
+      { description: 'f', quantity: 1, unit_price: 5, total: 5, subcategory: 'grupo6' },
+      { description: 'g', quantity: 1, unit_price: 4, total: 4, subcategory: 'grupo7' },
+    ];
+    const result = formatReceiptConfirmation(
+      makePendingExpense({ amount: 49, merchant: 'Tienda', source: 'image', items }),
+      makeCategory({ name: 'Groceries', icon: '🛒' }),
+    );
+    expect(result).toContain('grupo1');
+    expect(result).toContain('grupo5');
+    expect(result).not.toContain('grupo6');
+    expect(result).not.toContain('grupo7');
+  });
+
+  it('groups null subcategory as "otros"', () => {
+    const items: ReceiptItemParsed[] = [
+      { description: 'Item misterioso', quantity: 1, unit_price: 12, total: 12, subcategory: null },
+      { description: 'Otro item', quantity: 1, unit_price: 8, total: 8, subcategory: null },
+    ];
+    const result = formatReceiptConfirmation(
+      makePendingExpense({ amount: 20, merchant: 'Tienda', source: 'image', items }),
+      makeCategory({ name: 'Groceries', icon: '🛒' }),
+    );
+    expect(result).toContain('otros (2)');
+    expect(result).toContain('S/20.00');
+  });
+
+  it('backward compatible: no items shows existing format', () => {
+    const result = formatReceiptConfirmation(
+      makePendingExpense({ amount: 50, merchant: 'Wong', source: 'image', items: [] }),
+      makeCategory(),
+    );
+    expect(result).not.toContain('otros');
+    expect(result).toContain('🧾 Wong — S/50.00');
+    expect(result).toContain('¿Está bien?');
+  });
+
+  it('snapshot: receipt with item groups', () => {
+    expect(
+      formatReceiptConfirmation(
+        makePendingExpense({ amount: 86, merchant: 'Plaza Vea', source: 'image', items: makeReceiptItems() }),
+        makeCategory({ name: 'Groceries', icon: '🛒' }),
+      ),
+    ).toMatchInlineSnapshot(`
+      "🧾 Plaza Vea — S/86.00
+      Categoría: 🛒 Groceries · 25 feb
+
+        proteína (1)  S/25.50
+        limpieza (2)  S/24.00
+        lácteos (2)  S/21.00
+        bebidas (1)  S/10.50
+        verdura (1)  S/5.00
+
+      ¿Está bien?"
+    `);
+  });
+
+  it('snapshot: receipt with null subcategories', () => {
+    const items: ReceiptItemParsed[] = [
+      { description: 'Producto A', quantity: 1, unit_price: 15, total: 15, subcategory: null },
+      { description: 'Producto B', quantity: 2, unit_price: 5, total: 10, subcategory: 'snacks' },
+    ];
+    expect(
+      formatReceiptConfirmation(
+        makePendingExpense({ amount: 25, merchant: 'Bodega', source: 'image', items }),
+        makeCategory({ name: 'Groceries', icon: '🛒' }),
+      ),
+    ).toMatchInlineSnapshot(`
+      "🧾 Bodega — S/25.00
+      Categoría: 🛒 Groceries · 25 feb
+
+        otros (1)  S/15.00
+        snacks (1)  S/10.00
+
+      ¿Está bien?"
+    `);
+  });
+
+  it('snapshot: receipt without items (backward compatible)', () => {
+    expect(
+      formatReceiptConfirmation(
+        makePendingExpense({ amount: 45, merchant: null, source: 'image', items: [] }),
         makeCategory(),
       ),
     ).toMatchInlineSnapshot(`
