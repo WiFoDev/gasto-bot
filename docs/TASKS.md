@@ -31,7 +31,7 @@
   - Integration tests for `insertCategory`, `deleteCategory`
   - Depends on: TASK-37
 
-- [ ] TASK-39: Slug generation utility
+- [x] TASK-39: Slug generation utility
   - Create `src/utils.ts` with `slugify(name: string): string`
   - Rules: lowercase, spaces/special chars → underscore, remove accents, max 40 chars
   - Unit tests: "Gym & Fitness" → "gym_fitness", "Mascotas" → "mascotas", "Café/Snack" → "cafe_snack"
