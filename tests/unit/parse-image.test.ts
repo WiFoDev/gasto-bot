@@ -33,6 +33,7 @@ describe('parseReceipt', () => {
       currency: 'PEN',
       date: '2026-02-25',
       confidence: 0.92,
+      items: [],
     };
 
     mockCreate.mockResolvedValueOnce({
@@ -57,6 +58,7 @@ describe('parseReceipt', () => {
       currency: 'PEN',
       date: '2026-02-24',
       confidence: 0.85,
+      items: [],
     };
 
     mockCreate.mockResolvedValueOnce({
@@ -128,6 +130,7 @@ describe('parseReceipt', () => {
       currency: 'PEN',
       date: null,
       confidence: 0.45,
+      items: [],
     };
 
     mockCreate.mockResolvedValueOnce({
@@ -150,6 +153,7 @@ describe('parseReceipt', () => {
       currency: 'PEN',
       date: '2026-02-25',
       confidence: 0.9,
+      items: [],
     };
 
     mockCreate.mockResolvedValueOnce({

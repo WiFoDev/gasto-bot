@@ -85,12 +85,32 @@ export interface ParseResult {
   error_message: string | null;
 }
 
+export interface ReceiptItemParsed {
+  description: string;
+  quantity: number;
+  unit_price: number;
+  total: number;
+  subcategory: string | null;
+}
+
 export interface ReceiptResult {
   merchant: string | null;
   amount: number | null;
   currency: string | null;
   date: string | null;
   confidence: number;
+  items: ReceiptItemParsed[];
+}
+
+export interface ReceiptItem {
+  id: string;
+  expense_id: string;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  total: number;
+  subcategory: string | null;
+  created_at: string;
 }
 
 // ── Parse Context ────────────────────────────────────────────────

@@ -270,6 +270,7 @@ beforeEach(() => {
     currency: 'PEN',
     date: '2026-02-27',
     confidence: 0.85,
+    items: [],
   } satisfies ReceiptResult);
   mockedGetDateRange.mockReturnValue({ start: '2026-02-24', end: '2026-02-27' });
   mockedGetExpensesSummary.mockResolvedValue({

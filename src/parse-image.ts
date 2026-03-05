@@ -14,6 +14,7 @@ function makeErrorResult(): ReceiptResult {
     currency: null,
     date: null,
     confidence: 0,
+    items: [],
   };
 }
 
@@ -88,6 +89,7 @@ export async function parseReceipt(
     const raw = response.content[0].text;
     const jsonStr = extractJson(raw);
     const parsed = JSON.parse(jsonStr) as ReceiptResult;
+    if (!parsed.items) parsed.items = [];
 
     console.log(JSON.stringify({
       event: 'parse',

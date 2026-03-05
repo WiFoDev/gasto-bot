@@ -118,8 +118,8 @@
 
 > Extract individual line items from receipt photos. One expense = one total. Items stored as detail records with AI-assigned subcategories (free text: "lacteos", "limpieza", "proteina"). Graceful degradation: empty items array if receipt is blurry.
 
-- [ ] TASK-51: Migration + types for receipt items
-  - Create `migrations/004_receipt_items.sql`: `receipt_items` table (expense_id FK, description, quantity, unit_price, total, subcategory TEXT)
+- [x] TASK-51: Migration + types for receipt items
+  - Create `migrations/003_receipt_items.sql`: `receipt_items` table (expense_id FK, description, quantity, unit_price, total, subcategory TEXT)
   - Add `ReceiptItem`, `ReceiptItemParsed` interfaces to types.ts
   - Add `items: ReceiptItemParsed[]` to `ReceiptResult`
   - Depends on: Phase 2
