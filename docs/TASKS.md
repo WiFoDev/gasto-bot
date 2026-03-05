@@ -55,7 +55,7 @@
   - Inline snapshot tests for all new formatters
   - Depends on: TASK-37
 
-- [ ] TASK-43: Handler — category confirmation flow + list_categories + payment passthrough
+- [x] TASK-43: Handler — category confirmation flow + list_categories + payment passthrough
   - Add `awaiting_category_confirmation` state handling: confirm → create category + log expense, deny → fallback to "other"
   - Route `list_categories` intent to `formatCategoryList()`
   - Pass `payment_type`/`payment_method_name` through pending expense to insert

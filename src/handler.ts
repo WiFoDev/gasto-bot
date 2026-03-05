@@ -3,6 +3,7 @@ import {
   getUserByPhone,
   getCategories,
   getCategoryBySlug,
+  insertCategory,
   insertExpense,
   getExpenseById,
   getLastExpense,
@@ -41,7 +42,11 @@ import {
   formatUnknownUser,
   formatUnknown,
   formatExpenseCancelled,
+  formatNewCategoryConfirmation,
+  formatCategoryCreated,
+  formatCategoryList,
 } from './formatter.js';
+import { slugify } from './utils.js';
 import { CONFIDENCE_AUTO_LOG, CONFIDENCE_CONFIRM } from './config.js';
 import type { Category, Expense, ParseContext, ParseResult, PendingExpense, User } from './types.js';
 
@@ -279,6 +284,17 @@ async function handleLogExpense(
     payment_type: result.payment_type,
     payment_method_name: result.payment_method_name,
   };
+
+  // New category suggested — ask user to confirm creating it
+  if (!result.category_slug && result.suggested_category_name) {
+    setState(phone, {
+      lastAction: 'awaiting_category_confirmation',
+      pendingExpense: pending,
+      lastExpenseId: null,
+      updatedAt: Date.now(),
+    });
+    return formatNewCategoryConfirmation(pending, result.suggested_category_name);
+  }
 
   // If category is unknown/other, ask for clarification regardless of confidence
   const needsClarification =
@@ -605,7 +621,50 @@ async function handleMessageInner(
     return formatExpenseConfirmation(expense, category);
   }
 
-  // 6. Handle awaiting_confirmation
+  // 6. Handle awaiting_category_confirmation
+  if (state?.lastAction === 'awaiting_category_confirmation' && state.pendingExpense) {
+    const trimmed = content.trim();
+
+    if (CONFIRM_PATTERN.test(trimmed)) {
+      const suggestedName = state.pendingExpense.suggested_category_name;
+      if (!suggestedName) return formatError();
+
+      const slug = slugify(suggestedName);
+      const icon = '📁';
+      const newCategory = await insertCategory(user.id, suggestedName, slug, icon);
+
+      const pending = { ...state.pendingExpense, category_slug: newCategory.slug };
+      const { expense, category } = await resolveAndInsertExpense(user, pending, categories);
+      setState(phone, {
+        lastAction: 'expense_logged',
+        pendingExpense: null,
+        lastExpenseId: expense.id,
+        updatedAt: Date.now(),
+      });
+
+      const created = formatCategoryCreated(newCategory);
+      const confirmed = formatExpenseConfirmation(expense, category);
+      return `${created}\n${confirmed}`;
+    }
+
+    if (DENY_PATTERN.test(trimmed)) {
+      // Fallback: log with "other" category
+      const pending = { ...state.pendingExpense, category_slug: 'other', suggested_category_name: null };
+      const { expense, category } = await resolveAndInsertExpense(user, pending, categories);
+      setState(phone, {
+        lastAction: 'expense_logged',
+        pendingExpense: null,
+        lastExpenseId: expense.id,
+        updatedAt: Date.now(),
+      });
+      return formatExpenseConfirmation(expense, category);
+    }
+
+    // Unrecognized reply — clear state, fall through to normal parsing
+    clearState(phone);
+  }
+
+  // 7. Handle awaiting_confirmation
   let precomputedResult: ParseResult | null = null;
 
   if (state?.lastAction === 'awaiting_confirmation' && state.pendingExpense) {
@@ -715,6 +774,8 @@ async function handleMessageInner(
       const summary = await getExpensesSummary(user.id, start, end);
       return formatSummary(summary, period, user.currency);
     }
+    case 'list_categories':
+      return formatCategoryList(categories);
     case 'help':
       return formatHelp();
     case 'unknown':

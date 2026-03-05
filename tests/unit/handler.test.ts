@@ -49,6 +49,7 @@ import {
   getUserByPhone,
   getCategories,
   getCategoryBySlug,
+  insertCategory,
   insertExpense,
   getExpenseById,
   getLastExpense,
@@ -192,6 +193,7 @@ function makePendingExpense(
 const mockedGetUserByPhone = getUserByPhone as ReturnType<typeof vi.fn>;
 const mockedGetCategories = getCategories as ReturnType<typeof vi.fn>;
 const mockedGetCategoryBySlug = getCategoryBySlug as ReturnType<typeof vi.fn>;
+const mockedInsertCategory = insertCategory as ReturnType<typeof vi.fn>;
 const mockedInsertExpense = insertExpense as ReturnType<typeof vi.fn>;
 const mockedGetExpenseById = getExpenseById as ReturnType<typeof vi.fn>;
 const mockedGetLastExpense = getLastExpense as ReturnType<typeof vi.fn>;
@@ -1990,6 +1992,218 @@ describe('handleMessage', () => {
       const result = await handleMessage(PHONE, 'text', 'almuerzo 35');
       expect(typeof result).toBe('string');
       expect(result.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('list_categories intent', () => {
+    it('returns the category list', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'list_categories', amount: null, category_slug: null, description: null }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'mis categorias');
+
+      expect(result).toContain('📋');
+      expect(result).toContain('Food & Dining');
+      expect(result).toContain('Transport');
+      expect(result).toContain('Groceries');
+    });
+  });
+
+  describe('awaiting_category_confirmation flow', () => {
+    const suggestedPending = makePendingExpense({
+      amount: 120,
+      category_slug: null,
+      suggested_category_name: 'Mascotas',
+      description: 'veterinario',
+    });
+
+    it('enters awaiting_category_confirmation when AI suggests a new category', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          confidence: 0.95,
+          amount: 120,
+          category_slug: null,
+          suggested_category_name: 'Mascotas',
+          description: 'veterinario',
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'veterinario 120');
+
+      expect(result).toContain('S/120.00');
+      expect(result).toContain('Mascotas');
+      expect(result).toContain('?');
+      const state = getState(PHONE);
+      expect(state!.lastAction).toBe('awaiting_category_confirmation');
+      expect(state!.pendingExpense!.suggested_category_name).toBe('Mascotas');
+    });
+
+    it('creates category and logs expense on confirm', async () => {
+      setState(PHONE, {
+        lastAction: 'awaiting_category_confirmation',
+        pendingExpense: suggestedPending,
+        lastExpenseId: null,
+        updatedAt: Date.now(),
+      });
+
+      const newCategory: Category = {
+        id: 'cat-mascotas',
+        user_id: 'user-1',
+        name: 'Mascotas',
+        slug: 'mascotas',
+        icon: '📁',
+        is_default: false,
+        created_at: '2026-03-05T00:00:00Z',
+      };
+      mockedInsertCategory.mockResolvedValue(newCategory);
+      // getCategoryBySlug should now find the new category
+      mockedGetCategoryBySlug.mockImplementation(
+        async (_userId: string, slug: string) => {
+          if (slug === 'mascotas') return newCategory;
+          return mockCategories.find((c) => c.slug === slug) ?? null;
+        },
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'si');
+
+      expect(mockedInsertCategory).toHaveBeenCalledWith('user-1', 'Mascotas', 'mascotas', '📁');
+      expect(mockedInsertExpense).toHaveBeenCalled();
+      expect(result).toContain('Categoría creada');
+      expect(result).toContain('Mascotas');
+      expect(result).toContain('✅');
+      expect(result).toContain('S/120.00');
+      const state = getState(PHONE);
+      expect(state!.lastAction).toBe('expense_logged');
+    });
+
+    it('logs with "other" category on deny', async () => {
+      setState(PHONE, {
+        lastAction: 'awaiting_category_confirmation',
+        pendingExpense: suggestedPending,
+        lastExpenseId: null,
+        updatedAt: Date.now(),
+      });
+
+      const result = await handleMessage(PHONE, 'text', 'no');
+
+      expect(mockedInsertCategory).not.toHaveBeenCalled();
+      expect(mockedInsertExpense).toHaveBeenCalled();
+      const insertCall = mockedInsertExpense.mock.calls[0][0];
+      expect(insertCall.category_id).toBe('cat-other');
+      expect(result).toContain('✅');
+      expect(result).toContain('S/120.00');
+      const state = getState(PHONE);
+      expect(state!.lastAction).toBe('expense_logged');
+    });
+
+    it('falls through to normal parsing on unrecognized reply', async () => {
+      setState(PHONE, {
+        lastAction: 'awaiting_category_confirmation',
+        pendingExpense: suggestedPending,
+        lastExpenseId: null,
+        updatedAt: Date.now(),
+      });
+
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'help', amount: null, category_slug: null, description: null }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'ayuda');
+
+      expect(result).toBe(formatHelp());
+      expect(mockedInsertCategory).not.toHaveBeenCalled();
+      expect(mockedInsertExpense).not.toHaveBeenCalled();
+    });
+
+    it('preserves payment fields through category confirmation', async () => {
+      const pendingWithPayment = makePendingExpense({
+        amount: 120,
+        category_slug: null,
+        suggested_category_name: 'Mascotas',
+        description: 'veterinario',
+        payment_type: 'digital_wallet',
+        payment_method_name: 'Yape',
+      });
+      setState(PHONE, {
+        lastAction: 'awaiting_category_confirmation',
+        pendingExpense: pendingWithPayment,
+        lastExpenseId: null,
+        updatedAt: Date.now(),
+      });
+
+      const newCategory: Category = {
+        id: 'cat-mascotas',
+        user_id: 'user-1',
+        name: 'Mascotas',
+        slug: 'mascotas',
+        icon: '📁',
+        is_default: false,
+        created_at: '2026-03-05T00:00:00Z',
+      };
+      mockedInsertCategory.mockResolvedValue(newCategory);
+      mockedGetCategoryBySlug.mockImplementation(
+        async (_userId: string, slug: string) => {
+          if (slug === 'mascotas') return newCategory;
+          return mockCategories.find((c) => c.slug === slug) ?? null;
+        },
+      );
+
+      await handleMessage(PHONE, 'text', 'si');
+
+      const insertCall = mockedInsertExpense.mock.calls[0][0];
+      expect(insertCall.payment_type).toBe('digital_wallet');
+      expect(insertCall.payment_method_name).toBe('Yape');
+    });
+  });
+
+  describe('payment passthrough in normal flow', () => {
+    it('passes payment fields to insertExpense on auto-log', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          confidence: 0.95,
+          amount: 35,
+          category_slug: 'food_dining',
+          description: 'almuerzo',
+          payment_type: 'digital_wallet',
+          payment_method_name: 'Yape',
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'almuerzo 35 con yape');
+
+      expect(mockedInsertExpense).toHaveBeenCalled();
+      const insertCall = mockedInsertExpense.mock.calls[0][0];
+      expect(insertCall.payment_type).toBe('digital_wallet');
+      expect(insertCall.payment_method_name).toBe('Yape');
+      expect(result).toContain('✅');
+      expect(result).toContain('Yape');
+    });
+
+    it('passes payment fields through confirmation flow', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          confidence: 0.7,
+          amount: 35,
+          category_slug: 'food_dining',
+          description: 'almuerzo',
+          payment_type: 'cash',
+          payment_method_name: null,
+        }),
+      );
+
+      await handleMessage(PHONE, 'text', 'almuerzo 35 efectivo');
+
+      const state = getState(PHONE);
+      expect(state!.pendingExpense!.payment_type).toBe('cash');
+      expect(state!.pendingExpense!.payment_method_name).toBeNull();
+
+      // Now confirm
+      const result = await handleMessage(PHONE, 'text', 'si');
+
+      expect(mockedInsertExpense).toHaveBeenCalled();
+      const insertCall = mockedInsertExpense.mock.calls[0][0];
+      expect(insertCall.payment_type).toBe('cash');
     });
   });
 });
