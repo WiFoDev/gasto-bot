@@ -51,6 +51,21 @@ export interface Budget {
 
 export type PaymentType = 'cash' | 'credit_card' | 'debit_card' | 'digital_wallet' | 'bank_transfer' | 'other';
 
+export type RuleType = 'spending_limit' | 'payment_default' | 'prohibition' | 'habit';
+
+export interface FinancialRule {
+  id: string;
+  user_id: string;
+  name: string;
+  rule_type: RuleType;
+  category_id: string | null;
+  threshold: number | null;
+  period: 'daily' | 'weekly' | 'monthly' | null;
+  action_value: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
 // ── AI Parsing ────────────────────────────────────────────────────
 
 export type Intent =
@@ -62,6 +77,9 @@ export type Intent =
   | 'delete_expense'
   | 'list_categories'
   | 'monthly_closing'
+  | 'set_rule'
+  | 'list_rules'
+  | 'delete_rule'
   | 'help'
   | 'unknown'
   | 'error';

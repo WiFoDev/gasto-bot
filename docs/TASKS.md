@@ -159,7 +159,7 @@
 
 > User-defined rules checked on every expense log. Types: spending limits, payment defaults, prohibitions, habits. Violation alerts appended to expense confirmation.
 
-- [ ] TASK-57: Migration + types for financial rules
+- [x] TASK-57: Migration + types for financial rules
   - Create `migrations/005_financial_rules.sql`: `financial_rules` table (user_id, name, rule_type, category_id, threshold, period, action_value, is_active)
   - Add `FinancialRule` interface. Add `set_rule`, `list_rules`, `delete_rule` intents
   - Depends on: Phase 3
