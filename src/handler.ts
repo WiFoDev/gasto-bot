@@ -334,20 +334,28 @@ async function handleLogExpense(
     items: [],
   };
 
-  // New category suggested — ask user to confirm creating it
+  // New category suggested — check if it already exists (AI may not match correctly)
   if (!result.category_slug && result.suggested_category_name) {
-    setState(phone, {
-      lastAction: 'awaiting_category_confirmation',
-      pendingExpense: pending,
-      lastExpenseId: null,
-      updatedAt: Date.now(),
-    });
-    return formatNewCategoryConfirmation(pending, result.suggested_category_name);
+    const suggestedSlug = slugify(result.suggested_category_name);
+    const existingMatch = categories.find((c) => c.slug === suggestedSlug);
+
+    if (existingMatch) {
+      // Category already exists — use it directly instead of asking to create
+      pending.category_slug = existingMatch.slug;
+    } else {
+      setState(phone, {
+        lastAction: 'awaiting_category_confirmation',
+        pendingExpense: pending,
+        lastExpenseId: null,
+        updatedAt: Date.now(),
+      });
+      return formatNewCategoryConfirmation(pending, result.suggested_category_name);
+    }
   }
 
   // If category is unknown/other, ask for clarification regardless of confidence
   const needsClarification =
-    !result.category_slug || result.category_slug === 'other';
+    !pending.category_slug || pending.category_slug === 'other';
 
   // High confidence — auto-log (unless we need a description)
   if (result.confidence >= CONFIDENCE_AUTO_LOG && !needsClarification) {
@@ -631,7 +639,7 @@ export async function handleMessage(
   } catch (error) {
     console.log(JSON.stringify({
       event: 'handler_error',
-      error: error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? error.message : JSON.stringify(error),
       phone,
       timestamp: new Date().toISOString(),
     }));
@@ -697,7 +705,9 @@ async function handleMessageInner(
 
       const slug = slugify(suggestedName);
       const icon = '📁';
-      const newCategory = await insertCategory(user.id, suggestedName, slug, icon);
+      // Use existing category if it was already created (e.g. previous attempt failed after insert)
+      const newCategory = await getCategoryBySlug(user.id, slug)
+        ?? await insertCategory(user.id, suggestedName, slug, icon);
 
       const pending = { ...state.pendingExpense, category_slug: newCategory.slug };
       const { expense, category } = await resolveAndInsertExpense(user, pending, categories);

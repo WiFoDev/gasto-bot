@@ -2140,6 +2140,30 @@ describe('handleMessage', () => {
       expect(state!.pendingExpense!.suggested_category_name).toBe('Mascotas');
     });
 
+    it('uses existing category when AI suggests one that already exists', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          confidence: 0.95,
+          amount: 50,
+          category_slug: null,
+          suggested_category_name: 'Groceries',
+          description: 'mercado',
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'mercado 50');
+
+      // Should auto-log with existing category, not ask to create
+      expect(mockedInsertCategory).not.toHaveBeenCalled();
+      expect(mockedInsertExpense).toHaveBeenCalled();
+      const insertCall = mockedInsertExpense.mock.calls[0][0];
+      expect(insertCall.category_id).toBe('cat-groceries');
+      expect(result).toContain('✅');
+      expect(result).toContain('S/50.00');
+      const state = getState(PHONE);
+      expect(state!.lastAction).toBe('expense_logged');
+    });
+
     it('creates category and logs expense on confirm', async () => {
       setState(PHONE, {
         lastAction: 'awaiting_category_confirmation',
@@ -2158,10 +2182,16 @@ describe('handleMessage', () => {
         created_at: '2026-03-05T00:00:00Z',
       };
       mockedInsertCategory.mockResolvedValue(newCategory);
-      // getCategoryBySlug should now find the new category
+      // First getCategoryBySlug call (existence check) returns null — category doesn't exist yet
+      // Second call (inside resolveAndInsertExpense after insert) finds it
+      let mascotasCallCount = 0;
       mockedGetCategoryBySlug.mockImplementation(
         async (_userId: string, slug: string) => {
-          if (slug === 'mascotas') return newCategory;
+          if (slug === 'mascotas') {
+            mascotasCallCount++;
+            if (mascotasCallCount === 1) return null;
+            return newCategory;
+          }
           return mockCategories.find((c) => c.slug === slug) ?? null;
         },
       );
@@ -2169,6 +2199,43 @@ describe('handleMessage', () => {
       const result = await handleMessage(PHONE, 'text', 'si');
 
       expect(mockedInsertCategory).toHaveBeenCalledWith('user-1', 'Mascotas', 'mascotas', '📁');
+      expect(mockedInsertExpense).toHaveBeenCalled();
+      expect(result).toContain('Categoría creada');
+      expect(result).toContain('Mascotas');
+      expect(result).toContain('✅');
+      expect(result).toContain('S/120.00');
+      const state = getState(PHONE);
+      expect(state!.lastAction).toBe('expense_logged');
+    });
+
+    it('uses existing category instead of re-creating on duplicate confirm', async () => {
+      setState(PHONE, {
+        lastAction: 'awaiting_category_confirmation',
+        pendingExpense: suggestedPending,
+        lastExpenseId: null,
+        updatedAt: Date.now(),
+      });
+
+      const existingCategory: Category = {
+        id: 'cat-mascotas',
+        user_id: 'user-1',
+        name: 'Mascotas',
+        slug: 'mascotas',
+        icon: '📁',
+        is_default: false,
+        created_at: '2026-03-05T00:00:00Z',
+      };
+      // Category already exists from a previous failed attempt
+      mockedGetCategoryBySlug.mockImplementation(
+        async (_userId: string, slug: string) => {
+          if (slug === 'mascotas') return existingCategory;
+          return mockCategories.find((c) => c.slug === slug) ?? null;
+        },
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'si');
+
+      expect(mockedInsertCategory).not.toHaveBeenCalled();
       expect(mockedInsertExpense).toHaveBeenCalled();
       expect(result).toContain('Categoría creada');
       expect(result).toContain('Mascotas');
@@ -2243,9 +2310,14 @@ describe('handleMessage', () => {
         created_at: '2026-03-05T00:00:00Z',
       };
       mockedInsertCategory.mockResolvedValue(newCategory);
+      let mascotasCallCount = 0;
       mockedGetCategoryBySlug.mockImplementation(
         async (_userId: string, slug: string) => {
-          if (slug === 'mascotas') return newCategory;
+          if (slug === 'mascotas') {
+            mascotasCallCount++;
+            if (mascotasCallCount === 1) return null;
+            return newCategory;
+          }
           return mockCategories.find((c) => c.slug === slug) ?? null;
         },
       );
