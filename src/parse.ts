@@ -22,6 +22,9 @@ function makeErrorResult(message: string): ParseResult {
     payment_method_name: null,
     target_month: null,
     target_year: null,
+    rule_type: null,
+    rule_name: null,
+    rule_period: null,
     error_message: message,
   };
 }
@@ -79,6 +82,9 @@ export async function parseMessage(
       payment_method_name: (parsed.payment_method_name as string) ?? null,
       target_month: (parsed.target_month as number) ?? null,
       target_year: (parsed.target_year as number) ?? null,
+      rule_type: (parsed.rule_type as ParseResult['rule_type']) ?? null,
+      rule_name: (parsed.rule_name as string) ?? null,
+      rule_period: (parsed.rule_period as ParseResult['rule_period']) ?? null,
       error_message: (parsed.error_message as string) ?? null,
     };
 

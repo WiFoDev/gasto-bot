@@ -148,6 +148,9 @@ function makeParseResult(overrides: Partial<ParseResult> = {}): ParseResult {
     payment_method_name: null,
     target_month: null,
     target_year: null,
+    rule_type: null,
+    rule_name: null,
+    rule_period: null,
     error_message: null,
     ...overrides,
   };

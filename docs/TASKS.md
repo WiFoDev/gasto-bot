@@ -175,7 +175,7 @@
   - Unit tests with various rule combinations
   - Depends on: TASK-57
 
-- [ ] TASK-60: Prompt update for rule intents
+- [x] TASK-60: Prompt update for rule intents
   - Add `set_rule`, `list_rules`, `delete_rule` to expense-parser prompt with examples
   - Add ~10 fixtures: "avisa si gasto mas de 100 en comida", "mis reglas", "borra la regla de comida"
   - Depends on: TASK-57

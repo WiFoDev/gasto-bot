@@ -1,4 +1,4 @@
-import type { Intent, PaymentType } from '../../src/types.js';
+import type { Intent, PaymentType, RuleType } from '../../src/types.js';
 
 export interface MessageFixture {
   input: string;
@@ -17,6 +17,9 @@ export interface MessageFixture {
     payment_method_name?: string;
     target_month?: number;
     target_year?: number;
+    rule_type?: RuleType;
+    rule_name?: string;
+    rule_period?: 'daily' | 'weekly' | 'monthly';
   };
 }
 
@@ -336,5 +339,66 @@ export const MESSAGE_FIXTURES: MessageFixture[] = [
     input: 'monthly closing february',
     label: 'monthly closing English',
     expected: { intent: 'monthly_closing', target_month: 2, target_year: 2026 },
+  },
+
+  // ── Set rule ──────────────────────────────────────────────────────
+  {
+    input: 'avisa si gasto mas de 100 en comida',
+    label: 'spending limit on food',
+    expected: { intent: 'set_rule', rule_type: 'spending_limit', amount: 100, category_slug: 'food_dining', rule_period: 'monthly' },
+  },
+  {
+    input: 'no gastar mas de 50 diarios en comida rapida',
+    label: 'daily spending limit',
+    expected: { intent: 'set_rule', rule_type: 'spending_limit', amount: 50, rule_period: 'daily' },
+  },
+  {
+    input: 'limite de 500 mensual en entretenimiento',
+    label: 'monthly entertainment limit',
+    expected: { intent: 'set_rule', rule_type: 'spending_limit', amount: 500, category_slug: 'entertainment', rule_period: 'monthly' },
+  },
+  {
+    input: 'siempre pagar uber con yape',
+    label: 'payment default Uber with Yape',
+    expected: { intent: 'set_rule', rule_type: 'payment_default', payment_type: 'digital_wallet', payment_method_name: 'Yape' },
+  },
+  {
+    input: 'no comprar ropa este mes',
+    label: 'prohibition on shopping',
+    expected: { intent: 'set_rule', rule_type: 'prohibition', category_slug: 'shopping' },
+  },
+  {
+    input: 'limite semanal de 200 en transporte',
+    label: 'weekly transport limit',
+    expected: { intent: 'set_rule', rule_type: 'spending_limit', amount: 200, category_slug: 'transport', rule_period: 'weekly' },
+  },
+
+  // ── List rules ────────────────────────────────────────────────────
+  {
+    input: 'mis reglas',
+    label: 'list rules Spanish',
+    expected: { intent: 'list_rules' },
+  },
+  {
+    input: 'que reglas tengo?',
+    label: 'list rules question',
+    expected: { intent: 'list_rules' },
+  },
+  {
+    input: 'reglas',
+    label: 'list rules single word',
+    expected: { intent: 'list_rules' },
+  },
+
+  // ── Delete rule ───────────────────────────────────────────────────
+  {
+    input: 'borra la regla de comida',
+    label: 'delete food rule',
+    expected: { intent: 'delete_rule', category_slug: 'food_dining' },
+  },
+  {
+    input: 'elimina la regla de transporte',
+    label: 'delete transport rule',
+    expected: { intent: 'delete_rule', category_slug: 'transport' },
   },
 ];

@@ -100,6 +100,9 @@ export interface ParseResult {
   payment_method_name: string | null;
   target_month: number | null;
   target_year: number | null;
+  rule_type: RuleType | null;
+  rule_name: string | null;
+  rule_period: 'daily' | 'weekly' | 'monthly' | null;
   error_message: string | null;
 }
 

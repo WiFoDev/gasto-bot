@@ -49,6 +49,9 @@ describe('parseMessage', () => {
       payment_method_name: null,
       target_month: null,
       target_year: null,
+      rule_type: null,
+      rule_name: null,
+      rule_period: null,
       error_message: null,
     };
 
@@ -81,6 +84,9 @@ describe('parseMessage', () => {
       payment_method_name: null,
       target_month: null,
       target_year: null,
+      rule_type: null,
+      rule_name: null,
+      rule_period: null,
       error_message: null,
     };
 
@@ -111,6 +117,9 @@ describe('parseMessage', () => {
       payment_method_name: null,
       target_month: null,
       target_year: null,
+      rule_type: null,
+      rule_name: null,
+      rule_period: null,
       error_message: null,
     };
 
@@ -174,6 +183,9 @@ describe('parseMessage', () => {
       payment_method_name: null,
       target_month: null,
       target_year: null,
+      rule_type: null,
+      rule_name: null,
+      rule_period: null,
       error_message: null,
     };
 
@@ -216,6 +228,9 @@ describe('parseMessage', () => {
       payment_method_name: null,
       target_month: null,
       target_year: null,
+      rule_type: null,
+      rule_name: null,
+      rule_period: null,
       error_message: null,
     };
 
@@ -255,6 +270,9 @@ describe('parseMessage', () => {
       payment_method_name: 'Yape',
       target_month: null,
       target_year: null,
+      rule_type: null,
+      rule_name: null,
+      rule_period: null,
       error_message: null,
     };
 
@@ -285,6 +303,9 @@ describe('parseMessage', () => {
       payment_method_name: null,
       target_month: null,
       target_year: null,
+      rule_type: null,
+      rule_name: null,
+      rule_period: null,
       error_message: null,
     };
 
@@ -343,6 +364,9 @@ describe('parseMessage', () => {
       payment_method_name: null,
       target_month: null,
       target_year: null,
+      rule_type: null,
+      rule_name: null,
+      rule_period: null,
       error_message: null,
     };
 
@@ -373,6 +397,9 @@ describe('parseMessage', () => {
       payment_method_name: null,
       target_month: 2,
       target_year: 2026,
+      rule_type: null,
+      rule_name: null,
+      rule_period: null,
       error_message: null,
     };
 
@@ -433,6 +460,9 @@ describe('parseMessage', () => {
       payment_method_name: null,
       target_month: null,
       target_year: null,
+      rule_type: null,
+      rule_name: null,
+      rule_period: null,
       error_message: null,
     };
 
@@ -443,5 +473,140 @@ describe('parseMessage', () => {
     const result = await parseMessage('mis categorias', TEST_CATEGORIES);
 
     expect(result.intent).toBe('list_categories');
+  });
+
+  it('maps set_rule intent with rule fields', async () => {
+    const apiResponse: ParseResult = {
+      intent: 'set_rule',
+      confidence: 0.95,
+      amount: 100,
+      currency: null,
+      category_slug: 'food_dining',
+      description: null,
+      merchant: null,
+      date: null,
+      period: null,
+      correction_field: null,
+      suggested_category_name: null,
+      payment_type: null,
+      payment_method_name: null,
+      target_month: null,
+      target_year: null,
+      rule_type: 'spending_limit',
+      rule_name: 'Limite comida 100',
+      rule_period: 'monthly',
+      error_message: null,
+    };
+
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify(apiResponse) }],
+    });
+
+    const result = await parseMessage('avisa si gasto mas de 100 en comida', TEST_CATEGORIES);
+
+    expect(result.intent).toBe('set_rule');
+    expect(result.rule_type).toBe('spending_limit');
+    expect(result.rule_name).toBe('Limite comida 100');
+    expect(result.rule_period).toBe('monthly');
+    expect(result.amount).toBe(100);
+    expect(result.category_slug).toBe('food_dining');
+  });
+
+  it('maps list_rules intent', async () => {
+    const apiResponse: ParseResult = {
+      intent: 'list_rules',
+      confidence: 0.95,
+      amount: null,
+      currency: null,
+      category_slug: null,
+      description: null,
+      merchant: null,
+      date: null,
+      period: null,
+      correction_field: null,
+      suggested_category_name: null,
+      payment_type: null,
+      payment_method_name: null,
+      target_month: null,
+      target_year: null,
+      rule_type: null,
+      rule_name: null,
+      rule_period: null,
+      error_message: null,
+    };
+
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify(apiResponse) }],
+    });
+
+    const result = await parseMessage('mis reglas', TEST_CATEGORIES);
+
+    expect(result.intent).toBe('list_rules');
+  });
+
+  it('maps delete_rule intent with category', async () => {
+    const apiResponse: ParseResult = {
+      intent: 'delete_rule',
+      confidence: 0.9,
+      amount: null,
+      currency: null,
+      category_slug: 'food_dining',
+      description: null,
+      merchant: null,
+      date: null,
+      period: null,
+      correction_field: null,
+      suggested_category_name: null,
+      payment_type: null,
+      payment_method_name: null,
+      target_month: null,
+      target_year: null,
+      rule_type: null,
+      rule_name: 'comida',
+      rule_period: null,
+      error_message: null,
+    };
+
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify(apiResponse) }],
+    });
+
+    const result = await parseMessage('borra la regla de comida', TEST_CATEGORIES);
+
+    expect(result.intent).toBe('delete_rule');
+    expect(result.category_slug).toBe('food_dining');
+    expect(result.rule_name).toBe('comida');
+  });
+
+  it('defaults rule fields to null when AI omits them', async () => {
+    const partialResponse = {
+      intent: 'log_expense',
+      confidence: 0.9,
+      amount: 50,
+      currency: 'PEN',
+      category_slug: 'food_dining',
+      description: 'comida',
+      merchant: null,
+      date: '2026-02-26',
+      period: null,
+      correction_field: null,
+      suggested_category_name: null,
+      payment_type: null,
+      payment_method_name: null,
+      target_month: null,
+      target_year: null,
+      error_message: null,
+      // Missing: rule_type, rule_name, rule_period
+    };
+
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify(partialResponse) }],
+    });
+
+    const result = await parseMessage('comida 50', TEST_CATEGORIES);
+
+    expect(result.rule_type).toBeNull();
+    expect(result.rule_name).toBeNull();
+    expect(result.rule_period).toBeNull();
   });
 });

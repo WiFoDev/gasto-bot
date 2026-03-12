@@ -165,6 +165,33 @@ function evaluateFixture(fixture: MessageFixture, result: ParseResult): Check[] 
     });
   }
 
+  if (exp.rule_type !== undefined) {
+    checks.push({
+      field: 'rule_type',
+      passed: result.rule_type === exp.rule_type,
+      expected: exp.rule_type,
+      actual: result.rule_type,
+    });
+  }
+
+  if (exp.rule_period !== undefined) {
+    checks.push({
+      field: 'rule_period',
+      passed: result.rule_period === exp.rule_period,
+      expected: exp.rule_period,
+      actual: result.rule_period,
+    });
+  }
+
+  if (exp.rule_name !== undefined) {
+    checks.push({
+      field: 'rule_name',
+      passed: result.rule_name === exp.rule_name,
+      expected: exp.rule_name,
+      actual: result.rule_name,
+    });
+  }
+
   return checks;
 }
 

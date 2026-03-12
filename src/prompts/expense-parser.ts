@@ -28,6 +28,9 @@ Classify the message into exactly ONE intent:
 - "delete_expense" — User wants to delete the last logged expense. Examples: "delete that", "borra eso", "undo", "quita el ultimo", "cancel that".
 - "list_categories" — User wants to see their available categories. Examples: "mis categorias", "categorias", "que categorias tengo?", "my categories", "list categories".
 - "monthly_closing" — User is requesting a monthly closing/summary report. Examples: "cierra febrero", "cierre del mes", "cierre mensual", "resumen mensual", "cierre enero 2026", "monthly closing", "close the month".
+- "set_rule" — User wants to create a financial rule (spending limit, payment default, prohibition, or habit). Examples: "avisa si gasto mas de 100 en comida", "limite de 500 mensual en entretenimiento", "siempre pagar uber con yape", "no gastar mas de 50 diarios en comida rapida", "recordar llevar almuerzo al trabajo".
+- "list_rules" — User wants to see their active financial rules. Examples: "mis reglas", "que reglas tengo?", "list rules", "reglas", "show my rules".
+- "delete_rule" — User wants to delete a financial rule. Examples: "borra la regla de comida", "elimina la regla de transporte", "delete the food rule", "quita la regla de entretenimiento".
 - "help" — User is asking for help or how to use the bot. Examples: "help", "ayuda", "how does this work?", "que puedo hacer?", "commands".
 - "unknown" — Message does not match any of the above intents. Gibberish, greetings without expense context, unrelated questions.
 
@@ -80,6 +83,25 @@ For "monthly_closing":
 - "target_month" (required): The month number (1–12). "enero" → 1, "febrero" → 2, "marzo" → 3, etc. If the user says "del mes" or "mensual" without specifying a month, use the previous month.
 - "target_year" (required): The 4-digit year. Default to the current year (${today.slice(0, 4)}). If the target month is greater than the current month, assume the previous year.
 
+For "set_rule":
+- "rule_type" (required): The type of rule being created. Valid values:
+  - "spending_limit" — A spending cap on a category or overall. Examples: "avisa si gasto mas de 100 en comida", "limite de 500 mensual en entretenimiento", "no gastar mas de 50 diarios".
+  - "payment_default" — A default payment method for a category or merchant. Examples: "siempre pagar uber con yape", "pagar transporte con tarjeta".
+  - "prohibition" — A rule to avoid spending in a category. Examples: "no comprar ropa este mes", "prohibir gastos en entretenimiento".
+  - "habit" — A reminder or habit to follow. Examples: "recordar llevar almuerzo al trabajo", "ahorrar en transporte".
+- "rule_name" (required): A short, descriptive name for the rule in the user's language. AI-generated from the message context. Examples: "Limite comida 100 diario", "Pagar Uber con Yape", "No comprar ropa".
+- "amount": The threshold amount for spending_limit rules. null for other rule types.
+- "category_slug": The category the rule applies to, if applicable. null if the rule is general or the category doesn't exist.
+- "rule_period": The time period for spending_limit rules. Valid values: "daily", "weekly", "monthly". null for non-spending_limit rules. "diario" → "daily", "semanal" → "weekly", "mensual"/"al mes" → "monthly". Default "monthly" for spending_limit if not specified.
+- "payment_type": For payment_default rules, the default payment type. null otherwise.
+- "payment_method_name": For payment_default rules, the specific payment method name. null otherwise.
+
+For "list_rules": No additional fields needed.
+
+For "delete_rule":
+- "rule_name": A description matching the rule to delete, extracted from the user message. Used to identify which rule to remove. Examples: "comida" from "borra la regla de comida", "transporte" from "elimina la regla de transporte".
+- "category_slug": The category of the rule to delete, if identifiable. null if not clear.
+
 For "help": No additional fields needed.
 
 For "unknown": No additional fields needed.
@@ -118,6 +140,9 @@ Respond with ONLY a JSON object, no markdown, no explanation, no extra text:
   "payment_method_name": <string or null>,
   "target_month": <number 1-12 or null>,
   "target_year": <number or null>,
+  "rule_type": <"spending_limit" | "payment_default" | "prohibition" | "habit" | null>,
+  "rule_name": <string or null>,
+  "rule_period": <"daily" | "weekly" | "monthly" | null>,
   "error_message": <string or null>
 }
 
