@@ -18,6 +18,9 @@ const {
   getMonthlyClosingData,
   insertReceiptItems,
   getReceiptItems,
+  insertRule,
+  getActiveRules,
+  deleteRule,
 } = await import('../../src/db.js');
 
 // Direct client for test cleanup only
@@ -31,6 +34,7 @@ let foodCategoryId: string;
 let transportCategoryId: string;
 const testExpenseIds: string[] = [];
 const testCategoryIds: string[] = [];
+const testRuleIds: string[] = [];
 
 describe('db queries', () => {
   beforeAll(async () => {
@@ -51,6 +55,10 @@ describe('db queries', () => {
   });
 
   afterAll(async () => {
+    // Hard-delete financial rules
+    if (testRuleIds.length > 0) {
+      await supabase.from('financial_rules').delete().in('id', testRuleIds);
+    }
     // Hard-delete receipt items first (FK on expense_id)
     if (testExpenseIds.length > 0) {
       await supabase.from('receipt_items').delete().in('expense_id', testExpenseIds);
@@ -367,6 +375,131 @@ describe('db queries', () => {
       const data = await getMonthlyClosingData(userId, 2025, 1);
       // Previous month of Jan 2025 = Dec 2024
       expect(data.previousMonthTotal).toBeGreaterThanOrEqual(200);
+    });
+  });
+
+  describe('financial rules: insert → getActive → delete', () => {
+    let ruleId: string;
+
+    it('insertRule creates a spending_limit rule', async () => {
+      const rule = await insertRule(
+        userId,
+        'Limite comida diario',
+        'spending_limit',
+        foodCategoryId,
+        100,
+        'daily',
+        null,
+      );
+
+      expect(rule).toHaveProperty('id');
+      expect(rule.user_id).toBe(userId);
+      expect(rule.name).toBe('Limite comida diario');
+      expect(rule.rule_type).toBe('spending_limit');
+      expect(rule.category_id).toBe(foodCategoryId);
+      expect(Number(rule.threshold)).toBe(100);
+      expect(rule.period).toBe('daily');
+      expect(rule.action_value).toBeNull();
+      expect(rule.is_active).toBe(true);
+
+      ruleId = rule.id;
+      testRuleIds.push(ruleId);
+    });
+
+    it('insertRule creates a prohibition rule with no category', async () => {
+      const rule = await insertRule(
+        userId,
+        'No gastar fines de semana',
+        'prohibition',
+        null,
+        null,
+        null,
+        'No gastes los fines de semana',
+      );
+
+      expect(rule.rule_type).toBe('prohibition');
+      expect(rule.category_id).toBeNull();
+      expect(rule.threshold).toBeNull();
+      expect(rule.period).toBeNull();
+      expect(rule.action_value).toBe('No gastes los fines de semana');
+      expect(rule.is_active).toBe(true);
+
+      testRuleIds.push(rule.id);
+    });
+
+    it('insertRule creates a payment_default rule', async () => {
+      const rule = await insertRule(
+        userId,
+        'Comida siempre con Yape',
+        'payment_default',
+        foodCategoryId,
+        null,
+        null,
+        'digital_wallet:Yape',
+      );
+
+      expect(rule.rule_type).toBe('payment_default');
+      expect(rule.action_value).toBe('digital_wallet:Yape');
+
+      testRuleIds.push(rule.id);
+    });
+
+    it('getActiveRules returns all active rules for user', async () => {
+      const rules = await getActiveRules(userId);
+      expect(rules.length).toBeGreaterThanOrEqual(3);
+
+      const names = rules.map((r) => r.name);
+      expect(names).toContain('Limite comida diario');
+      expect(names).toContain('No gastar fines de semana');
+      expect(names).toContain('Comida siempre con Yape');
+
+      // Sorted by created_at ascending
+      for (let i = 1; i < rules.length; i++) {
+        expect(rules[i - 1].created_at <= rules[i].created_at).toBe(true);
+      }
+    });
+
+    it('getActiveRules returns empty array for user with no rules', async () => {
+      // Use a fake UUID that won't match any user
+      const rules = await getActiveRules('00000000-0000-0000-0000-000000000000');
+      expect(rules).toEqual([]);
+    });
+
+    it('deleteRule removes the rule', async () => {
+      await deleteRule(userId, ruleId);
+
+      const rules = await getActiveRules(userId);
+      const found = rules.find((r) => r.id === ruleId);
+      expect(found).toBeUndefined();
+
+      // Remove from cleanup array
+      const idx = testRuleIds.indexOf(ruleId);
+      if (idx >= 0) testRuleIds.splice(idx, 1);
+    });
+
+    it('deleteRule is a no-op for non-existent rule', async () => {
+      // Should not throw
+      await deleteRule(userId, '00000000-0000-0000-0000-000000000000');
+    });
+
+    it('deleteRule scoped to user — cannot delete another user rule', async () => {
+      const rule = await insertRule(
+        userId,
+        'Rule to test scope',
+        'habit',
+        null,
+        null,
+        'weekly',
+        'Revisa tus gastos',
+      );
+      testRuleIds.push(rule.id);
+
+      // Try to delete with a different user_id — should be no-op
+      await deleteRule('00000000-0000-0000-0000-000000000000', rule.id);
+
+      const rules = await getActiveRules(userId);
+      const found = rules.find((r) => r.id === rule.id);
+      expect(found).toBeDefined();
     });
   });
 

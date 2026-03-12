@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
-import type { User, Category, Expense, CategoryTotal, SummaryResult, Budget, MonthlyClosingData, ReceiptItem, ReceiptItemParsed } from './types.js';
+import type { User, Category, Expense, CategoryTotal, SummaryResult, Budget, MonthlyClosingData, ReceiptItem, ReceiptItemParsed, FinancialRule, RuleType } from './types.js';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -383,6 +383,60 @@ export async function getReceiptItems(expenseId: string): Promise<ReceiptItem[]>
 
   if (error) throw error;
   return data ?? [];
+}
+
+// ── Financial Rules ───────────────────────────────────────────────
+
+export async function insertRule(
+  userId: string,
+  name: string,
+  ruleType: RuleType,
+  categoryId: string | null,
+  threshold: number | null,
+  period: 'daily' | 'weekly' | 'monthly' | null,
+  actionValue: string | null,
+): Promise<FinancialRule> {
+  const { data, error } = await supabase
+    .from('financial_rules')
+    .insert({
+      user_id: userId,
+      name,
+      rule_type: ruleType,
+      category_id: categoryId,
+      threshold,
+      period,
+      action_value: actionValue,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getActiveRules(userId: string): Promise<FinancialRule[]> {
+  const { data, error } = await supabase
+    .from('financial_rules')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function deleteRule(
+  userId: string,
+  ruleId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('financial_rules')
+    .delete()
+    .eq('id', ruleId)
+    .eq('user_id', userId);
+
+  if (error) throw error;
 }
 
 export async function getExpensesSummary(
