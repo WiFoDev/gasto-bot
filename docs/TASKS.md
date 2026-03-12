@@ -169,7 +169,7 @@
   - Integration tests
   - Depends on: TASK-57
 
-- [ ] TASK-59: Rules engine — checking logic
+- [x] TASK-59: Rules engine — checking logic
   - New `src/rules.ts`: `checkRules(userId, expense, rules): RuleViolation[]`
   - Pure function, no side effects
   - Unit tests with various rule combinations
