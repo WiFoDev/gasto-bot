@@ -155,6 +155,27 @@
 
 ---
 
+### Bug Fixes: Category Handling
+
+> Two bugs discovered 2026-03-11 in production. Both relate to category handling edge cases not covered during Phase 1.
+
+- [ ] BUG-01: Fix `correct_expense` crash when changing to non-existent category
+  - **Symptom**: User logs expense, asks "cambiar categoría a familia" → "Algo salió mal, intenta de nuevo"
+  - **Root cause**: `handleCorrectExpense` in `handler.ts` only handles `category_slug` (existing categories). When parser returns `category_slug: null` + `suggested_category_name`, the update payload is empty → `formatError()`
+  - **Fix**: Add new-category confirmation flow inside `handleCorrectExpense`, mirroring the `log_expense` flow. When `suggested_category_name` is set and `category_slug` is null, enter `awaiting_category_confirmation` state with correction context
+  - Write failing tests first, then fix handler
+  - Files: `tests/unit/handler.test.ts`, `src/handler.ts`
+
+- [ ] BUG-02: Allow alternative category selection during `awaiting_category_confirmation`
+  - **Symptom**: Bot asks "¿La creo?" for unknown category, user replies "mejor usa Housing" → "No entendí eso"
+  - **Root cause**: Confirmation handler only accepts yes/no regex. Any other reply clears state and re-parses as fresh message → `intent: 'unknown'`
+  - **Fix**: Before falling through to fresh parsing, attempt to match the reply against existing user categories. If a match is found, use that category for the pending expense instead of creating a new one
+  - Write failing tests first, then fix handler
+  - Files: `tests/unit/handler.test.ts`, `src/handler.ts`
+  - Depends on: BUG-01 (shares state/confirmation flow patterns)
+
+---
+
 ### Phase 4: Financial Rules Engine
 
 > User-defined rules checked on every expense log. Types: spending limits, payment defaults, prohibitions, habits. Violation alerts appended to expense confirmation.
@@ -164,7 +185,7 @@
   - Add `FinancialRule` interface. Add `set_rule`, `list_rules`, `delete_rule` intents
   - Depends on: Phase 3
 
-- [ ] TASK-58: DB functions for rules CRUD
+- [x] TASK-58: DB functions for rules CRUD
   - `insertRule`, `getActiveRules`, `deleteRule` in db.ts
   - Integration tests
   - Depends on: TASK-57
