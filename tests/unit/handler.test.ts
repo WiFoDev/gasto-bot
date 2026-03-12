@@ -1449,6 +1449,65 @@ describe('handleMessage', () => {
       expect(mockedUpdateExpense).toHaveBeenCalledWith('exp-1', { merchant: 'Wong' });
     });
 
+    it('enters awaiting_category_confirmation when correcting to non-existent category', async () => {
+      setState(PHONE, {
+        lastAction: 'expense_logged',
+        pendingExpense: null,
+        lastExpenseId: 'exp-1',
+        updatedAt: Date.now(),
+      });
+      mockedGetExpenseById.mockResolvedValue(
+        makeExpense({ id: 'exp-1', amount: 35, category_id: 'cat-food', description: 'almuerzo' }),
+      );
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'correct_expense',
+          confidence: 0.9,
+          correction_field: 'category',
+          category_slug: null,
+          suggested_category_name: 'Familia',
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'cambiar categoría a familia');
+
+      expect(result).toContain('Familia');
+      expect(result).toContain('?');
+      const state = getState(PHONE);
+      expect(state!.lastAction).toBe('awaiting_category_confirmation');
+      expect(state!.pendingExpense!.suggested_category_name).toBe('Familia');
+      expect(state!.lastExpenseId).toBe('exp-1');
+      expect(mockedUpdateExpense).not.toHaveBeenCalled();
+    });
+
+    it('uses existing category when correcting to suggested category that already exists', async () => {
+      setState(PHONE, {
+        lastAction: 'expense_logged',
+        pendingExpense: null,
+        lastExpenseId: 'exp-1',
+        updatedAt: Date.now(),
+      });
+      mockedGetExpenseById.mockResolvedValue(
+        makeExpense({ id: 'exp-1', category_id: 'cat-food' }),
+      );
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'correct_expense',
+          confidence: 0.9,
+          correction_field: 'category',
+          category_slug: null,
+          suggested_category_name: 'Groceries',
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'cambiar a groceries');
+
+      expect(result).toContain('Actualizado');
+      expect(result).toContain('Groceries');
+      expect(mockedUpdateExpense).toHaveBeenCalledWith('exp-1', { category_id: 'cat-groceries' });
+      expect(mockedInsertCategory).not.toHaveBeenCalled();
+    });
+
     it('corrects multiple fields on saved expense', async () => {
       setState(PHONE, {
         lastAction: 'expense_logged',
@@ -2285,6 +2344,81 @@ describe('handleMessage', () => {
       expect(result).toBe(formatHelp());
       expect(mockedInsertCategory).not.toHaveBeenCalled();
       expect(mockedInsertExpense).not.toHaveBeenCalled();
+    });
+
+    it('creates category and updates expense on confirm during correction flow', async () => {
+      const correctionPending = makePendingExpense({
+        amount: 35,
+        category_slug: null,
+        suggested_category_name: 'Familia',
+        description: 'almuerzo',
+      });
+      setState(PHONE, {
+        lastAction: 'awaiting_category_confirmation',
+        pendingExpense: correctionPending,
+        lastExpenseId: 'exp-1',
+        updatedAt: Date.now(),
+      });
+
+      const newCategory: Category = {
+        id: 'cat-familia',
+        user_id: 'user-1',
+        name: 'Familia',
+        slug: 'familia',
+        icon: '📁',
+        is_default: false,
+        created_at: '2026-03-11T00:00:00Z',
+      };
+      mockedInsertCategory.mockResolvedValue(newCategory);
+      mockedGetCategoryBySlug.mockImplementation(
+        async (_userId: string, slug: string) => {
+          if (slug === 'familia') return null;
+          return mockCategories.find((c) => c.slug === slug) ?? null;
+        },
+      );
+      mockedGetExpenseById.mockResolvedValue(
+        makeExpense({ id: 'exp-1', category_id: 'cat-food' }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'si');
+
+      expect(mockedInsertCategory).toHaveBeenCalledWith('user-1', 'Familia', 'familia', '📁');
+      expect(mockedUpdateExpense).toHaveBeenCalledWith('exp-1', { category_id: 'cat-familia' });
+      expect(mockedInsertExpense).not.toHaveBeenCalled();
+      expect(result).toContain('Categoría creada');
+      expect(result).toContain('Familia');
+      expect(result).toContain('Actualizado');
+      const state = getState(PHONE);
+      expect(state!.lastAction).toBe('expense_logged');
+      expect(state!.lastExpenseId).toBe('exp-1');
+    });
+
+    it('updates to other category on deny during correction flow', async () => {
+      const correctionPending = makePendingExpense({
+        amount: 35,
+        category_slug: null,
+        suggested_category_name: 'Familia',
+        description: 'almuerzo',
+      });
+      setState(PHONE, {
+        lastAction: 'awaiting_category_confirmation',
+        pendingExpense: correctionPending,
+        lastExpenseId: 'exp-1',
+        updatedAt: Date.now(),
+      });
+      mockedGetExpenseById.mockResolvedValue(
+        makeExpense({ id: 'exp-1', category_id: 'cat-food' }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'no');
+
+      expect(mockedInsertCategory).not.toHaveBeenCalled();
+      expect(mockedInsertExpense).not.toHaveBeenCalled();
+      expect(mockedUpdateExpense).toHaveBeenCalledWith('exp-1', { category_id: 'cat-other' });
+      expect(result).toContain('Actualizado');
+      const state = getState(PHONE);
+      expect(state!.lastAction).toBe('expense_logged');
+      expect(state!.lastExpenseId).toBe('exp-1');
     });
 
     it('preserves payment fields through category confirmation', async () => {

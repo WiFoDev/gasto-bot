@@ -159,7 +159,7 @@
 
 > Two bugs discovered 2026-03-11 in production. Both relate to category handling edge cases not covered during Phase 1.
 
-- [ ] BUG-01: Fix `correct_expense` crash when changing to non-existent category
+- [x] BUG-01: Fix `correct_expense` crash when changing to non-existent category
   - **Symptom**: User logs expense, asks "cambiar categoría a familia" → "Algo salió mal, intenta de nuevo"
   - **Root cause**: `handleCorrectExpense` in `handler.ts` only handles `category_slug` (existing categories). When parser returns `category_slug: null` + `suggested_category_name`, the update payload is empty → `formatError()`
   - **Fix**: Add new-category confirmation flow inside `handleCorrectExpense`, mirroring the `log_expense` flow. When `suggested_category_name` is set and `category_slug` is null, enter `awaiting_category_confirmation` state with correction context

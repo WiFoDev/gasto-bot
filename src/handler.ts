@@ -433,6 +433,40 @@ async function handleCorrectExpense(
     newCategory = await getCategoryBySlug(user.id, result.category_slug);
     if (newCategory) updatePayload.category_id = newCategory.id;
   }
+  if (result.correction_field === 'category' && !result.category_slug && result.suggested_category_name) {
+    const suggestedSlug = slugify(result.suggested_category_name);
+    const existingMatch = categories.find((c) => c.slug === suggestedSlug);
+
+    if (existingMatch) {
+      newCategory = existingMatch;
+      updatePayload.category_id = existingMatch.id;
+    } else {
+      // Enter category confirmation flow with correction context
+      const pending: PendingExpense = {
+        amount: expense.amount,
+        currency: expense.currency,
+        category_slug: null,
+        suggested_category_name: result.suggested_category_name,
+        description: expense.description,
+        merchant: expense.merchant,
+        date: expense.date,
+        source: expense.source,
+        raw_input: expense.raw_input,
+        image_url: expense.image_url,
+        ai_confidence: expense.ai_confidence,
+        payment_type: expense.payment_type,
+        payment_method_name: expense.payment_method_name,
+        items: [],
+      };
+      setState(phone, {
+        lastAction: 'awaiting_category_confirmation',
+        pendingExpense: pending,
+        lastExpenseId: expense.id,
+        updatedAt: Date.now(),
+      });
+      return formatNewCategoryConfirmation(pending, result.suggested_category_name);
+    }
+  }
   if (result.correction_field === 'amount' && result.amount != null) {
     updatePayload.amount = result.amount;
   }
@@ -709,6 +743,25 @@ async function handleMessageInner(
       const newCategory = await getCategoryBySlug(user.id, slug)
         ?? await insertCategory(user.id, suggestedName, slug, icon);
 
+      if (state.lastExpenseId) {
+        // Correction flow — update existing expense
+        const existingExpense = await getExpenseById(state.lastExpenseId);
+        if (!existingExpense) return formatError();
+        const oldCategory = categories.find((c) => c.id === existingExpense.category_id);
+        if (!oldCategory) return formatError();
+
+        const updated = await updateExpense(state.lastExpenseId, { category_id: newCategory.id });
+        setState(phone, {
+          lastAction: 'expense_logged',
+          pendingExpense: null,
+          lastExpenseId: state.lastExpenseId,
+          updatedAt: Date.now(),
+        });
+        const created = formatCategoryCreated(newCategory);
+        const corrected = formatCorrection(updated, oldCategory, newCategory);
+        return `${created}\n${corrected}`;
+      }
+
       const pending = { ...state.pendingExpense, category_slug: newCategory.slug };
       const { expense, category } = await resolveAndInsertExpense(user, pending, categories);
       setState(phone, {
@@ -725,6 +778,25 @@ async function handleMessageInner(
     }
 
     if (DENY_PATTERN.test(trimmed)) {
+      if (state.lastExpenseId) {
+        // Correction flow — update to "other" category
+        const otherCategory = categories.find((c) => c.slug === 'other');
+        if (!otherCategory) return formatError();
+        const existingExpense = await getExpenseById(state.lastExpenseId);
+        if (!existingExpense) return formatError();
+        const oldCategory = categories.find((c) => c.id === existingExpense.category_id);
+        if (!oldCategory) return formatError();
+
+        const updated = await updateExpense(state.lastExpenseId, { category_id: otherCategory.id });
+        setState(phone, {
+          lastAction: 'expense_logged',
+          pendingExpense: null,
+          lastExpenseId: state.lastExpenseId,
+          updatedAt: Date.now(),
+        });
+        return formatCorrection(updated, oldCategory, otherCategory);
+      }
+
       // Fallback: log with "other" category
       const pending = { ...state.pendingExpense, category_slug: 'other', suggested_category_name: null };
       const { expense, category } = await resolveAndInsertExpense(user, pending, categories);
