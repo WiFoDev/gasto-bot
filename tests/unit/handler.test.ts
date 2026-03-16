@@ -41,6 +41,9 @@ vi.mock('../../src/db.js', () => ({
   getDateRange: vi.fn(),
   getExpensesSummary: vi.fn(),
   getMonthlyClosingData: vi.fn(),
+  insertRule: vi.fn(),
+  getActiveRules: vi.fn(),
+  deleteRule: vi.fn(),
 }));
 
 import { handleMessage } from '../../src/handler.js';
@@ -64,6 +67,9 @@ import {
   getDateRange,
   getExpensesSummary,
   getMonthlyClosingData,
+  insertRule,
+  getActiveRules,
+  deleteRule,
 } from '../../src/db.js';
 import { getState, setState, clearState } from '../../src/state.js';
 import { formatHelp, formatError, formatUnknown, formatParseError, formatDatabaseError, formatNoExpenseToModify, formatReceiptUnclear, formatUnknownUser, formatExpenseCancelled, formatMerchantCorrection, formatCorrectionGeneric } from '../../src/formatter.js';
@@ -77,6 +83,7 @@ import type {
   ReceiptItemParsed,
   ReceiptResult,
   MonthlyClosingData,
+  FinancialRule,
 } from '../../src/types.js';
 
 // ── Test Helpers ────────────────────────────────────────────────────
@@ -222,6 +229,25 @@ const mockedGetMonthlyClosingData = getMonthlyClosingData as ReturnType<typeof v
 const mockedParseReceipt = parseReceipt as ReturnType<typeof vi.fn>;
 const mockedDownloadImage = downloadImage as ReturnType<typeof vi.fn>;
 const mockedUploadImage = uploadImage as ReturnType<typeof vi.fn>;
+const mockedInsertRule = insertRule as ReturnType<typeof vi.fn>;
+const mockedGetActiveRules = getActiveRules as ReturnType<typeof vi.fn>;
+const mockedDeleteRule = deleteRule as ReturnType<typeof vi.fn>;
+
+function makeRule(overrides: Partial<FinancialRule> = {}): FinancialRule {
+  return {
+    id: 'rule-1',
+    user_id: 'user-1',
+    name: 'Límite comida',
+    rule_type: 'spending_limit',
+    category_id: 'cat-food',
+    threshold: 500,
+    period: 'monthly',
+    action_value: null,
+    is_active: true,
+    created_at: '2026-03-01T00:00:00Z',
+    ...overrides,
+  };
+}
 
 function makeBudget(overrides: Partial<Budget> = {}): Budget {
   return {
@@ -281,6 +307,7 @@ beforeEach(() => {
     confidence: 0.85,
     items: [],
   } satisfies ReceiptResult);
+  mockedGetActiveRules.mockResolvedValue([]);
   mockedGetDateRange.mockReturnValue({ start: '2026-02-24', end: '2026-02-27' });
   mockedGetExpensesSummary.mockResolvedValue({
     total: 342.5,
@@ -2838,6 +2865,314 @@ describe('handleMessage', () => {
       expect(result).toContain('46%');
       expect(result).toContain('24%');
       expect(result).toContain('19%');
+    });
+  });
+
+  describe('set_rule intent', () => {
+    it('creates a spending_limit rule with category', async () => {
+      const rule = makeRule();
+      mockedInsertRule.mockResolvedValue(rule);
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'set_rule',
+          rule_type: 'spending_limit',
+          rule_name: 'Límite comida',
+          amount: 500,
+          category_slug: 'food_dining',
+          rule_period: 'monthly',
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'avisa si gasto mas de 500 en comida');
+
+      expect(mockedInsertRule).toHaveBeenCalledWith(
+        'user-1', 'Límite comida', 'spending_limit', 'cat-food', 500, 'monthly', null,
+      );
+      expect(result).toContain('Regla creada');
+      expect(result).toContain('Límite comida');
+    });
+
+    it('creates a spending_limit rule without category (global)', async () => {
+      const rule = makeRule({ category_id: null });
+      mockedInsertRule.mockResolvedValue(rule);
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'set_rule',
+          rule_type: 'spending_limit',
+          rule_name: 'Límite mensual',
+          amount: 2000,
+          category_slug: null,
+          rule_period: 'monthly',
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'avisa si gasto mas de 2000 al mes');
+
+      expect(mockedInsertRule).toHaveBeenCalledWith(
+        'user-1', 'Límite mensual', 'spending_limit', null, 2000, 'monthly', null,
+      );
+      expect(result).toContain('Regla creada');
+    });
+
+    it('creates a prohibition rule', async () => {
+      const rule = makeRule({ rule_type: 'prohibition', threshold: null, period: null });
+      mockedInsertRule.mockResolvedValue(rule);
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'set_rule',
+          rule_type: 'prohibition',
+          rule_name: 'No entretenimiento',
+          amount: null,
+          category_slug: 'entertainment',
+        }),
+      );
+
+      // Need entertainment category in our mocks — use getCategoryBySlug
+      mockedGetCategoryBySlug.mockImplementation(
+        async (_userId: string, slug: string) => {
+          if (slug === 'entertainment') return { id: 'cat-ent', user_id: 'user-1', name: 'Entertainment', slug: 'entertainment', icon: '🎬', is_default: true, created_at: '2026-01-01T00:00:00Z' };
+          return mockCategories.find((c) => c.slug === slug) ?? null;
+        },
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'prohibir entretenimiento');
+
+      expect(mockedInsertRule).toHaveBeenCalledWith(
+        'user-1', 'No entretenimiento', 'prohibition', 'cat-ent', null, null, null,
+      );
+      expect(result).toContain('Regla creada');
+    });
+
+    it('creates a payment_default rule', async () => {
+      const rule = makeRule({
+        rule_type: 'payment_default',
+        threshold: null,
+        period: null,
+        action_value: 'Yape',
+      });
+      mockedInsertRule.mockResolvedValue(rule);
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'set_rule',
+          rule_type: 'payment_default',
+          rule_name: 'Pagar con Yape',
+          amount: null,
+          category_slug: 'food_dining',
+          payment_type: 'digital_wallet',
+          payment_method_name: 'Yape',
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'siempre pagar comida con yape');
+
+      expect(mockedInsertRule).toHaveBeenCalledWith(
+        'user-1', 'Pagar con Yape', 'payment_default', 'cat-food', null, null, 'Yape',
+      );
+      expect(result).toContain('Regla creada');
+    });
+
+    it('returns error when rule_type is missing', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'set_rule',
+          rule_type: null,
+          rule_name: 'algo',
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'crea una regla');
+
+      expect(mockedInsertRule).not.toHaveBeenCalled();
+      expect(result).toContain('salió mal');
+    });
+
+    it('returns error when rule_name is missing', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'set_rule',
+          rule_type: 'spending_limit',
+          rule_name: null,
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'limite gasto');
+
+      expect(mockedInsertRule).not.toHaveBeenCalled();
+      expect(result).toContain('salió mal');
+    });
+
+    it('defaults spending_limit period to monthly', async () => {
+      const rule = makeRule();
+      mockedInsertRule.mockResolvedValue(rule);
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'set_rule',
+          rule_type: 'spending_limit',
+          rule_name: 'Límite comida',
+          amount: 500,
+          category_slug: 'food_dining',
+          rule_period: null,
+        }),
+      );
+
+      await handleMessage(PHONE, 'text', 'avisa si gasto mas de 500 en comida');
+
+      expect(mockedInsertRule).toHaveBeenCalledWith(
+        'user-1', 'Límite comida', 'spending_limit', 'cat-food', 500, 'monthly', null,
+      );
+    });
+  });
+
+  describe('list_rules intent', () => {
+    it('lists active rules', async () => {
+      const rules = [
+        makeRule(),
+        makeRule({ id: 'rule-2', name: 'No snacks', rule_type: 'prohibition', category_id: 'cat-groceries', threshold: null, period: null }),
+      ];
+      mockedGetActiveRules.mockResolvedValue(rules);
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'list_rules' }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'mis reglas');
+
+      expect(mockedGetActiveRules).toHaveBeenCalledWith('user-1');
+      expect(result).toContain('Tus reglas');
+      expect(result).toContain('Límite comida');
+      expect(result).toContain('No snacks');
+    });
+
+    it('shows empty state when no rules exist', async () => {
+      mockedGetActiveRules.mockResolvedValue([]);
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'list_rules' }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'mis reglas');
+
+      expect(result).toContain('No tienes reglas activas');
+    });
+  });
+
+  describe('delete_rule intent', () => {
+    it('deletes a rule matching by name', async () => {
+      const rule = makeRule({ name: 'Límite comida' });
+      mockedGetActiveRules.mockResolvedValue([rule]);
+      mockedDeleteRule.mockResolvedValue(undefined);
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'delete_rule',
+          rule_name: 'comida',
+          category_slug: null,
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'borra la regla de comida');
+
+      expect(mockedDeleteRule).toHaveBeenCalledWith('user-1', 'rule-1');
+      expect(result).toContain('Regla eliminada');
+      expect(result).toContain('Límite comida');
+    });
+
+    it('deletes a rule matching by category', async () => {
+      const rule = makeRule({ name: 'Limite general', category_id: 'cat-food' });
+      mockedGetActiveRules.mockResolvedValue([rule]);
+      mockedDeleteRule.mockResolvedValue(undefined);
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'delete_rule',
+          rule_name: null,
+          category_slug: 'food_dining',
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'borra la regla de food');
+
+      expect(mockedDeleteRule).toHaveBeenCalledWith('user-1', 'rule-1');
+      expect(result).toContain('Regla eliminada');
+    });
+
+    it('returns not-found when no rule matches', async () => {
+      mockedGetActiveRules.mockResolvedValue([makeRule({ name: 'Otra regla' })]);
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'delete_rule',
+          rule_name: 'entretenimiento',
+          category_slug: null,
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'borra la regla de entretenimiento');
+
+      expect(mockedDeleteRule).not.toHaveBeenCalled();
+      expect(result).toContain('No encontré');
+    });
+  });
+
+  describe('rule violation checks on expense logging', () => {
+    it('appends rule violation alerts after expense is logged', async () => {
+      const rule = makeRule({ name: 'Límite comida', threshold: 100, period: 'monthly' });
+      mockedGetActiveRules.mockResolvedValue([rule]);
+      mockedGetExpensesTotal.mockResolvedValue(150);
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          confidence: 0.95,
+          amount: 35,
+          category_slug: 'food_dining',
+          description: 'almuerzo',
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'almuerzo 35');
+
+      expect(result).toContain('✅');
+      expect(result).toContain('S/35.00');
+      expect(result).toContain('Límite comida');
+    });
+
+    it('does not append alerts when no rules are violated', async () => {
+      mockedGetActiveRules.mockResolvedValue([
+        makeRule({ name: 'Límite comida', threshold: 1000, period: 'monthly' }),
+      ]);
+      mockedGetExpensesTotal.mockResolvedValue(50);
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          confidence: 0.95,
+          amount: 35,
+          category_slug: 'food_dining',
+          description: 'almuerzo',
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'almuerzo 35');
+
+      expect(result).toContain('✅');
+      expect(result).not.toContain('Límite comida');
+    });
+
+    it('appends prohibition violation after expense logging', async () => {
+      const rule = makeRule({
+        name: 'No comida fuera',
+        rule_type: 'prohibition',
+        category_id: 'cat-food',
+        threshold: null,
+        period: null,
+      });
+      mockedGetActiveRules.mockResolvedValue([rule]);
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          confidence: 0.95,
+          amount: 35,
+          category_slug: 'food_dining',
+          description: 'almuerzo',
+        }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'almuerzo 35');
+
+      expect(result).toContain('✅');
+      expect(result).toContain('No comida fuera');
+      expect(result).toContain('no permitido');
     });
   });
 });

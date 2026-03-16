@@ -201,7 +201,7 @@
   - Add ~10 fixtures: "avisa si gasto mas de 100 en comida", "mis reglas", "borra la regla de comida"
   - Depends on: TASK-57
 
-- [ ] TASK-61: Handler for rule CRUD + violation checks
+- [x] TASK-61: Handler for rule CRUD + violation checks
   - `handleSetRule()`, `handleListRules()`, `handleDeleteRule()`
   - After expense logging, call `checkRules()` and append alerts
   - Unit tests

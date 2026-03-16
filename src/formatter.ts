@@ -1,4 +1,5 @@
-import type { Expense, Category, PendingExpense, Budget, SummaryResult, MonthlyClosingData, PaymentType } from './types.js';
+import type { Expense, Category, PendingExpense, Budget, SummaryResult, MonthlyClosingData, PaymentType, FinancialRule } from './types.js';
+import type { RuleViolation } from './rules.js';
 
 const MAX_DESCRIPTION_LENGTH = 50;
 
@@ -395,4 +396,95 @@ export function formatMonthlyClosing(data: MonthlyClosingData, currency: string)
   }
 
   return msg;
+}
+
+// ── Financial Rules ─────────────────────────────────────────────
+
+const RULE_TYPE_LABELS: Record<string, string> = {
+  spending_limit: '💸 Límite de gasto',
+  prohibition: '🚫 Prohibición',
+  payment_default: '💳 Método de pago',
+  habit: '🎯 Hábito',
+};
+
+const PERIOD_LABELS: Record<string, string> = {
+  daily: 'diario',
+  weekly: 'semanal',
+  monthly: 'mensual',
+};
+
+export function formatRuleCreated(rule: FinancialRule, category: Category | null): string {
+  const typeLabel = RULE_TYPE_LABELS[rule.rule_type] ?? rule.rule_type;
+  let msg = `✅ Regla creada: ${typeLabel}\n"${rule.name}"`;
+
+  if (rule.threshold != null) {
+    msg += `\nLímite: ${formatCurrency(rule.threshold, 'PEN')}`;
+  }
+  if (rule.period) {
+    msg += ` ${PERIOD_LABELS[rule.period] ?? rule.period}`;
+  }
+  if (category) {
+    msg += `\nCategoría: ${category.icon} ${category.name}`;
+  }
+  if (rule.action_value) {
+    msg += `\nValor: ${rule.action_value}`;
+  }
+  return msg;
+}
+
+export function formatRuleDeleted(rule: FinancialRule): string {
+  return `🗑️ Regla eliminada: "${rule.name}"`;
+}
+
+export function formatRuleList(rules: FinancialRule[], categories: Category[]): string {
+  if (rules.length === 0) {
+    return 'No tienes reglas activas. Prueba "avisa si gasto más de 100 en comida".';
+  }
+
+  const catMap = new Map(categories.map((c) => [c.id, c]));
+
+  let msg = '📋 Tus reglas:\n';
+  for (const rule of rules) {
+    const typeLabel = RULE_TYPE_LABELS[rule.rule_type] ?? rule.rule_type;
+    const cat = rule.category_id ? catMap.get(rule.category_id) : null;
+    const catLabel = cat ? ` — ${cat.icon} ${cat.name}` : '';
+
+    let detail = '';
+    if (rule.threshold != null && rule.period) {
+      detail = ` (${formatCurrency(rule.threshold, 'PEN')} ${PERIOD_LABELS[rule.period] ?? rule.period})`;
+    } else if (rule.action_value) {
+      detail = ` (${rule.action_value})`;
+    }
+
+    msg += `\n${typeLabel}: "${rule.name}"${detail}${catLabel}`;
+  }
+  return msg;
+}
+
+export function formatRuleViolation(violation: RuleViolation, category: Category | null): string {
+  const rule = violation.rule;
+  const catLabel = category ? category.name : 'general';
+
+  switch (rule.rule_type) {
+    case 'spending_limit': {
+      const spent = formatCurrency(violation.spent ?? 0, 'PEN');
+      const limit = formatCurrency(rule.threshold ?? 0, 'PEN');
+      return `💸 "${rule.name}": llevas ${spent} de ${limit} en ${catLabel}`;
+    }
+    case 'prohibition':
+      return `🚫 "${rule.name}": gasto en ${catLabel} no permitido`;
+    case 'payment_default':
+      return `💳 "${rule.name}": método esperado era ${rule.action_value}`;
+    case 'habit': {
+      const spent = formatCurrency(violation.spent ?? 0, 'PEN');
+      const limit = formatCurrency(rule.threshold ?? 0, 'PEN');
+      return `🎯 "${rule.name}": llevas ${spent} de ${limit} en ${catLabel}`;
+    }
+    default:
+      return `⚠️ Regla "${rule.name}" activada`;
+  }
+}
+
+export function formatNoRuleFound(): string {
+  return 'No encontré una regla que coincida.';
 }

@@ -16,6 +16,9 @@ import {
   getDateRange,
   getExpensesSummary,
   getMonthlyClosingData,
+  insertRule,
+  getActiveRules,
+  deleteRule,
 } from './db.js';
 import { parseMessage } from './parse.js';
 import { parseReceipt } from './parse-image.js';
@@ -49,8 +52,15 @@ import {
   formatCategoryList,
   formatBudgetAlert,
   formatMonthlyClosing,
+  formatRuleCreated,
+  formatRuleDeleted,
+  formatRuleList,
+  formatRuleViolation,
+  formatNoRuleFound,
 } from './formatter.js';
 import { slugify } from './utils.js';
+import { checkRules } from './rules.js';
+import type { PeriodSpending } from './rules.js';
 import { CONFIDENCE_AUTO_LOG, CONFIDENCE_CONFIRM } from './config.js';
 import type { Category, Expense, ParseContext, ParseResult, PendingExpense, User } from './types.js';
 
@@ -205,6 +215,16 @@ async function checkBudgetAlerts(
 function appendAlerts(message: string, alerts: string[]): string {
   if (alerts.length === 0) return message;
   return message + '\n\n' + alerts.join('\n');
+}
+
+async function getAllAlerts(
+  user: User,
+  expense: Expense,
+  categories: Category[],
+): Promise<string[]> {
+  const budgetAlerts = await checkBudgetAlerts(user, expense.category_id, categories);
+  const ruleAlerts = await checkRuleViolations(user, expense, categories);
+  return [...budgetAlerts, ...ruleAlerts];
 }
 
 function buildConfirmationMessage(
@@ -366,7 +386,7 @@ async function handleLogExpense(
       lastExpenseId: expense.id,
       updatedAt: Date.now(),
     });
-    const alerts = await checkBudgetAlerts(user, expense.category_id, categories);
+    const alerts = await getAllAlerts(user, expense, categories);
     return appendAlerts(formatExpenseConfirmation(expense, category), alerts);
   }
 
@@ -648,6 +668,136 @@ async function handleMonthlyClosing(
   return formatMonthlyClosing(data, user.currency);
 }
 
+async function handleSetRule(
+  user: User,
+  categories: Category[],
+  result: ParseResult,
+): Promise<string> {
+  if (!result.rule_type || !result.rule_name) return formatError();
+
+  // Resolve category
+  let categoryId: string | null = null;
+  let category: Category | null = null;
+  if (result.category_slug) {
+    category = await getCategoryBySlug(user.id, result.category_slug);
+    categoryId = category?.id ?? null;
+  }
+
+  // Resolve fields based on rule type
+  const threshold = result.amount ?? null;
+  const period = result.rule_period
+    ?? (result.rule_type === 'spending_limit' || result.rule_type === 'habit' ? 'monthly' : null);
+  const actionValue = result.payment_method_name ?? result.payment_type ?? null;
+
+  const rule = await insertRule(
+    user.id,
+    result.rule_name,
+    result.rule_type,
+    categoryId,
+    threshold,
+    period,
+    actionValue,
+  );
+
+  return formatRuleCreated(rule, category);
+}
+
+async function handleListRules(
+  user: User,
+  categories: Category[],
+): Promise<string> {
+  const rules = await getActiveRules(user.id);
+  return formatRuleList(rules, categories);
+}
+
+async function handleDeleteRule(
+  user: User,
+  categories: Category[],
+  result: ParseResult,
+): Promise<string> {
+  const rules = await getActiveRules(user.id);
+  if (rules.length === 0) return formatNoRuleFound();
+
+  // Match by name (fuzzy) or category
+  const nameQuery = result.rule_name?.toLowerCase() ?? '';
+  const categorySlug = result.category_slug;
+  let categoryId: string | null = null;
+  if (categorySlug) {
+    const cat = await getCategoryBySlug(user.id, categorySlug);
+    categoryId = cat?.id ?? null;
+  }
+
+  const matched = rules.find((r) => {
+    if (nameQuery && r.name.toLowerCase().includes(nameQuery)) return true;
+    if (categoryId && r.category_id === categoryId) return true;
+    return false;
+  });
+
+  if (!matched) return formatNoRuleFound();
+
+  await deleteRule(user.id, matched.id);
+  return formatRuleDeleted(matched);
+}
+
+async function checkRuleViolations(
+  user: User,
+  expense: Expense,
+  categories: Category[],
+): Promise<string[]> {
+  const rules = await getActiveRules(user.id);
+  if (rules.length === 0) return [];
+
+  // Build period spending for all relevant rule periods
+  const periodSpending: PeriodSpending = {};
+  const periodsNeeded = new Set<'daily' | 'weekly' | 'monthly'>();
+  const categoryIdsNeeded = new Set<string | null>();
+
+  for (const rule of rules) {
+    if (!rule.is_active) continue;
+    if (rule.period) {
+      periodsNeeded.add(rule.period);
+      categoryIdsNeeded.add(rule.category_id);
+    }
+  }
+
+  for (const period of periodsNeeded) {
+    const { start, end } = getPeriodDates(
+      period === 'daily' ? 'weekly' : period, // daily uses weekly dates as a container
+      user.timezone,
+    );
+
+    // For daily, narrow to today
+    const dailyDate = period === 'daily' ? getTodayDate(user.timezone) : null;
+    const startDate = dailyDate ?? start;
+    const endDate = dailyDate ?? end;
+
+    for (const catId of categoryIdsNeeded) {
+      const key = `${catId ?? 'all'}_${period}`;
+      if (!(key in periodSpending)) {
+        periodSpending[key] = await getExpensesTotal(user.id, catId, startDate, endDate);
+      }
+    }
+  }
+
+  const violations = checkRules(
+    {
+      amount: expense.amount,
+      category_id: expense.category_id,
+      payment_type: expense.payment_type,
+      payment_method_name: expense.payment_method_name,
+    },
+    rules,
+    periodSpending,
+  );
+
+  return violations.map((v) => {
+    const cat = v.rule.category_id
+      ? categories.find((c) => c.id === v.rule.category_id) ?? null
+      : null;
+    return formatRuleViolation(v, cat);
+  });
+}
+
 const MAX_MESSAGE_LENGTH = 500;
 const CONFIRM_PATTERN = /^(yes|y|yep|yeah|sure|si|sí|sip|sep|ok|okay|dale|claro|va)$/i;
 const DENY_PATTERN = /^(no|nop|nope|nah|nel|cancel|cancelar)$/i;
@@ -725,7 +875,7 @@ async function handleMessageInner(
       lastExpenseId: expense.id,
       updatedAt: Date.now(),
     });
-    const alerts = await checkBudgetAlerts(user, expense.category_id, categories);
+    const alerts = await getAllAlerts(user, expense, categories);
     return appendAlerts(formatExpenseConfirmation(expense, category), alerts);
   }
 
@@ -771,7 +921,7 @@ async function handleMessageInner(
         updatedAt: Date.now(),
       });
 
-      const alerts = await checkBudgetAlerts(user, expense.category_id, categories);
+      const alerts = await getAllAlerts(user, expense, categories);
       const created = formatCategoryCreated(newCategory);
       const confirmed = formatExpenseConfirmation(expense, category);
       return appendAlerts(`${created}\n${confirmed}`, alerts);
@@ -806,7 +956,7 @@ async function handleMessageInner(
         lastExpenseId: expense.id,
         updatedAt: Date.now(),
       });
-      const alerts = await checkBudgetAlerts(user, expense.category_id, categories);
+      const alerts = await getAllAlerts(user, expense, categories);
       return appendAlerts(formatExpenseConfirmation(expense, category), alerts);
     }
 
@@ -847,7 +997,7 @@ async function handleMessageInner(
         lastExpenseId: expense.id,
         updatedAt: Date.now(),
       });
-      const alerts = await checkBudgetAlerts(user, expense.category_id, categories);
+      const alerts = await getAllAlerts(user, expense, categories);
       return appendAlerts(formatExpenseConfirmation(expense, category), alerts);
     }
 
@@ -872,7 +1022,7 @@ async function handleMessageInner(
         lastExpenseId: expense.id,
         updatedAt: Date.now(),
       });
-      const alerts = await checkBudgetAlerts(user, expense.category_id, categories);
+      const alerts = await getAllAlerts(user, expense, categories);
       return appendAlerts(formatExpenseConfirmation(expense, category), alerts);
     }
     if (DENY_PATTERN.test(trimmed)) {
@@ -968,6 +1118,12 @@ async function handleMessageInner(
     }
     case 'monthly_closing':
       return handleMonthlyClosing(user, result);
+    case 'set_rule':
+      return handleSetRule(user, categories, result);
+    case 'list_rules':
+      return handleListRules(user, categories);
+    case 'delete_rule':
+      return handleDeleteRule(user, categories, result);
     case 'list_categories':
       return formatCategoryList(categories);
     case 'help':
