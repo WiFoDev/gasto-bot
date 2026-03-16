@@ -166,7 +166,7 @@
   - Write failing tests first, then fix handler
   - Files: `tests/unit/handler.test.ts`, `src/handler.ts`
 
-- [ ] BUG-02: Allow alternative category selection during `awaiting_category_confirmation`
+- [x] BUG-02: Allow alternative category selection during `awaiting_category_confirmation`
   - **Symptom**: Bot asks "¿La creo?" for unknown category, user replies "mejor usa Housing" → "No entendí eso"
   - **Root cause**: Confirmation handler only accepts yes/no regex. Any other reply clears state and re-parses as fresh message → `intent: 'unknown'`
   - **Fix**: Before falling through to fresh parsing, attempt to match the reply against existing user categories. If a match is found, use that category for the pending expense instead of creating a new one

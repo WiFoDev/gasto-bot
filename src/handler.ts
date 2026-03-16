@@ -810,6 +810,47 @@ async function handleMessageInner(
       return appendAlerts(formatExpenseConfirmation(expense, category), alerts);
     }
 
+    // Before falling through, check if the reply matches an existing category
+    const lowerReply = trimmed.toLowerCase();
+    const matchedCategory = categories.find(
+      (c) =>
+        c.name.toLowerCase() === lowerReply ||
+        c.slug === lowerReply ||
+        lowerReply.includes(c.name.toLowerCase()) ||
+        lowerReply.includes(c.slug),
+    );
+
+    if (matchedCategory) {
+      if (state.lastExpenseId) {
+        // Correction flow — update existing expense to matched category
+        const existingExpense = await getExpenseById(state.lastExpenseId);
+        if (!existingExpense) return formatError();
+        const oldCategory = categories.find((c) => c.id === existingExpense.category_id);
+        if (!oldCategory) return formatError();
+
+        const updated = await updateExpense(state.lastExpenseId, { category_id: matchedCategory.id });
+        setState(phone, {
+          lastAction: 'expense_logged',
+          pendingExpense: null,
+          lastExpenseId: state.lastExpenseId,
+          updatedAt: Date.now(),
+        });
+        return formatCorrection(updated, oldCategory, matchedCategory);
+      }
+
+      // Normal flow — log expense with matched category
+      const pending = { ...state.pendingExpense, category_slug: matchedCategory.slug, suggested_category_name: null };
+      const { expense, category } = await resolveAndInsertExpense(user, pending, categories);
+      setState(phone, {
+        lastAction: 'expense_logged',
+        pendingExpense: null,
+        lastExpenseId: expense.id,
+        updatedAt: Date.now(),
+      });
+      const alerts = await checkBudgetAlerts(user, expense.category_id, categories);
+      return appendAlerts(formatExpenseConfirmation(expense, category), alerts);
+    }
+
     // Unrecognized reply — clear state, fall through to normal parsing
     clearState(phone);
   }
