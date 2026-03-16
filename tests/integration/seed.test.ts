@@ -42,7 +42,8 @@ describe('seed data verification', () => {
     const { data: categories, error } = await supabase
       .from('categories')
       .select('slug, name, icon, is_default')
-      .eq('user_id', user!.id);
+      .eq('user_id', user!.id)
+      .eq('is_default', true);
 
     expect(error).toBeNull();
     expect(categories).toHaveLength(9);

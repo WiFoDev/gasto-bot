@@ -92,7 +92,7 @@ For "set_rule":
 - "rule_name" (required): A short, descriptive name for the rule in the user's language. AI-generated from the message context. Examples: "Limite comida 100 diario", "Pagar Uber con Yape", "No comprar ropa".
 - "amount": The threshold amount for spending_limit rules. null for other rule types.
 - "category_slug": The category the rule applies to, if applicable. null if the rule is general or the category doesn't exist.
-- "rule_period": The time period for spending_limit rules. Valid values: "daily", "weekly", "monthly". null for non-spending_limit rules. "diario" → "daily", "semanal" → "weekly", "mensual"/"al mes" → "monthly". Default "monthly" for spending_limit if not specified.
+- "rule_period": The time period for spending_limit rules. Valid values: "daily", "weekly", "monthly". null for non-spending_limit rules. "diario" → "daily", "semanal" → "weekly", "mensual"/"al mes" → "monthly". IMPORTANT: If no period is explicitly mentioned, ALWAYS default to "monthly" for spending_limit rules.
 - "payment_type": For payment_default rules, the default payment type. null otherwise.
 - "payment_method_name": For payment_default rules, the specific payment method name. null otherwise.
 

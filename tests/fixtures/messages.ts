@@ -322,8 +322,8 @@ export const MESSAGE_FIXTURES: MessageFixture[] = [
   },
   {
     input: 'cierre del mes',
-    label: 'monthly closing current month',
-    expected: { intent: 'monthly_closing', target_month: 3, target_year: 2026 },
+    label: 'monthly closing current month (prompt says: use previous month)',
+    expected: { intent: 'monthly_closing', target_month: 2, target_year: 2026 },
   },
   {
     input: 'resumen mensual enero',

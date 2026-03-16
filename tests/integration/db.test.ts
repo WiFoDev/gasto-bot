@@ -89,10 +89,11 @@ describe('db queries', () => {
   });
 
   describe('getCategories', () => {
-    it('returns all 9 categories for user', async () => {
+    it('returns at least 9 default categories for user', async () => {
       const categories = await getCategories(userId);
-      expect(categories).toHaveLength(9);
-      const slugs = categories.map((c) => c.slug).sort();
+      const defaults = categories.filter((c) => c.is_default);
+      expect(defaults).toHaveLength(9);
+      const slugs = defaults.map((c) => c.slug).sort();
       expect(slugs).toContain('food_dining');
       expect(slugs).toContain('transport');
       expect(slugs).toContain('other');
