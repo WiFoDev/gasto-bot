@@ -120,6 +120,17 @@ The user is being asked to confirm a pending expense: ${context.pendingConfirmat
 
 IMPORTANT: If the user sends a merchant name, category name, or description WITHOUT an amount or explicit expense-logging language, classify as "correct_expense" (they are correcting the pending expense, not logging a new one). Only classify as "log_expense" if the message contains a clear numeric amount for a NEW expense.
 
+` : ''}${context?.pendingCategoryConfirmation ? `## Current context
+
+The user is being asked to confirm creating a new category "${context.pendingCategoryConfirmation.suggested_category_name}" for an expense of ${context.pendingCategoryConfirmation.amount} ${context.pendingCategoryConfirmation.currency}${context.pendingCategoryConfirmation.description ? ` ("${context.pendingCategoryConfirmation.description}")` : ''}.
+
+Classify the user's reply:
+- If the user CONFIRMS creating the category (e.g., "sí", "créala", "dale", "crea la categoría", "sí, crea", "ok créala", or any affirmative response), set intent to "log_expense" and set "suggested_category_name" to "${context.pendingCategoryConfirmation.suggested_category_name}". Leave "category_slug" as null.
+- If the user wants to create a DIFFERENT new category name (e.g., "mejor llámala Familia", "crea 'Ayuda'"), set intent to "log_expense", set "suggested_category_name" to the new name they specified, and leave "category_slug" as null.
+- If the user picks an EXISTING category from the list above (e.g., "ponlo en transporte", "usa groceries"), set intent to "log_expense" with "category_slug" set to the matching slug and "suggested_category_name" as null.
+- If the user DENIES (e.g., "no", "cancelar", "no la crees"), set intent to "unknown".
+- If the user sends a completely unrelated message (a new expense with an amount, a query, help, etc.), classify it normally by its actual intent — ignore the pending category.
+
 ` : ''}## Output format
 
 Respond with ONLY a JSON object, no markdown, no explanation, no extra text:

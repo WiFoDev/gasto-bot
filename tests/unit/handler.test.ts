@@ -2354,7 +2354,7 @@ describe('handleMessage', () => {
       expect(state!.lastAction).toBe('expense_logged');
     });
 
-    it('falls through to normal parsing on unrecognized reply that does not match a category', async () => {
+    it('falls through to normal parsing when AI returns unrelated intent', async () => {
       setState(PHONE, {
         lastAction: 'awaiting_category_confirmation',
         pendingExpense: suggestedPending,
@@ -2373,7 +2373,7 @@ describe('handleMessage', () => {
       expect(mockedInsertExpense).not.toHaveBeenCalled();
     });
 
-    it('uses existing category when user replies with category name instead of yes/no', async () => {
+    it('uses existing category when AI returns log_expense with category_slug', async () => {
       setState(PHONE, {
         lastAction: 'awaiting_category_confirmation',
         pendingExpense: suggestedPending,
@@ -2381,7 +2381,11 @@ describe('handleMessage', () => {
         updatedAt: Date.now(),
       });
 
-      const result = await handleMessage(PHONE, 'text', 'Food & Dining');
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'log_expense', category_slug: 'food_dining', suggested_category_name: null, amount: null }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'ponlo en Food & Dining');
 
       expect(mockedInsertCategory).not.toHaveBeenCalled();
       expect(mockedInsertExpense).toHaveBeenCalled();
@@ -2393,45 +2397,7 @@ describe('handleMessage', () => {
       expect(state!.lastAction).toBe('expense_logged');
     });
 
-    it('uses existing category when user replies with category slug', async () => {
-      setState(PHONE, {
-        lastAction: 'awaiting_category_confirmation',
-        pendingExpense: suggestedPending,
-        lastExpenseId: null,
-        updatedAt: Date.now(),
-      });
-
-      const result = await handleMessage(PHONE, 'text', 'transport');
-
-      expect(mockedInsertCategory).not.toHaveBeenCalled();
-      expect(mockedInsertExpense).toHaveBeenCalled();
-      const insertCall = mockedInsertExpense.mock.calls[0][0];
-      expect(insertCall.category_id).toBe('cat-transport');
-      expect(result).toContain('✅');
-      const state = getState(PHONE);
-      expect(state!.lastAction).toBe('expense_logged');
-    });
-
-    it('uses existing category from reply with prefix text like "mejor usa"', async () => {
-      setState(PHONE, {
-        lastAction: 'awaiting_category_confirmation',
-        pendingExpense: suggestedPending,
-        lastExpenseId: null,
-        updatedAt: Date.now(),
-      });
-
-      const result = await handleMessage(PHONE, 'text', 'mejor usa Groceries');
-
-      expect(mockedInsertCategory).not.toHaveBeenCalled();
-      expect(mockedInsertExpense).toHaveBeenCalled();
-      const insertCall = mockedInsertExpense.mock.calls[0][0];
-      expect(insertCall.category_id).toBe('cat-groceries');
-      expect(result).toContain('✅');
-      const state = getState(PHONE);
-      expect(state!.lastAction).toBe('expense_logged');
-    });
-
-    it('uses existing category from reply during correction flow', async () => {
+    it('uses existing category from AI parse during correction flow', async () => {
       const correctionPending = makePendingExpense({
         amount: 35,
         category_slug: null,
@@ -2448,7 +2414,11 @@ describe('handleMessage', () => {
         makeExpense({ id: 'exp-1', category_id: 'cat-food' }),
       );
 
-      const result = await handleMessage(PHONE, 'text', 'Groceries');
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'log_expense', category_slug: 'groceries', suggested_category_name: null, amount: null }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'mejor usa Groceries');
 
       expect(mockedInsertCategory).not.toHaveBeenCalled();
       expect(mockedInsertExpense).not.toHaveBeenCalled();
@@ -2459,7 +2429,7 @@ describe('handleMessage', () => {
       expect(state!.lastExpenseId).toBe('exp-1');
     });
 
-    it('matches category name case-insensitively', async () => {
+    it('creates category when AI confirms via natural language like "crea la categoría"', async () => {
       setState(PHONE, {
         lastAction: 'awaiting_category_confirmation',
         pendingExpense: suggestedPending,
@@ -2467,13 +2437,102 @@ describe('handleMessage', () => {
         updatedAt: Date.now(),
       });
 
-      const result = await handleMessage(PHONE, 'text', 'food & dining');
+      const newCategory: Category = {
+        id: 'cat-mascotas',
+        user_id: 'user-1',
+        name: 'Mascotas',
+        slug: 'mascotas',
+        icon: '📁',
+        is_default: false,
+        created_at: '2026-03-11T00:00:00Z',
+      };
+      mockedInsertCategory.mockResolvedValue(newCategory);
+      mockedGetCategoryBySlug.mockImplementation(
+        async (_userId: string, slug: string) => {
+          if (slug === 'mascotas') return null;
+          return mockCategories.find((c) => c.slug === slug) ?? null;
+        },
+      );
 
-      expect(mockedInsertCategory).not.toHaveBeenCalled();
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'log_expense', category_slug: null, suggested_category_name: 'Mascotas', amount: null }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'sí, crea la categoría');
+
+      expect(mockedInsertCategory).toHaveBeenCalledWith('user-1', 'Mascotas', 'mascotas', '📁');
       expect(mockedInsertExpense).toHaveBeenCalled();
-      const insertCall = mockedInsertExpense.mock.calls[0][0];
-      expect(insertCall.category_id).toBe('cat-food');
+      expect(result).toContain('Categoría creada');
+      expect(result).toContain('Mascotas');
       expect(result).toContain('✅');
+      const state = getState(PHONE);
+      expect(state!.lastAction).toBe('expense_logged');
+    });
+
+    it('creates alternative category when AI extracts a different name', async () => {
+      setState(PHONE, {
+        lastAction: 'awaiting_category_confirmation',
+        pendingExpense: suggestedPending,
+        lastExpenseId: null,
+        updatedAt: Date.now(),
+      });
+
+      const newCategory: Category = {
+        id: 'cat-animales',
+        user_id: 'user-1',
+        name: 'Animales',
+        slug: 'animales',
+        icon: '📁',
+        is_default: false,
+        created_at: '2026-03-11T00:00:00Z',
+      };
+      mockedInsertCategory.mockResolvedValue(newCategory);
+      mockedGetCategoryBySlug.mockImplementation(
+        async (_userId: string, slug: string) => {
+          if (slug === 'animales') return null;
+          return mockCategories.find((c) => c.slug === slug) ?? null;
+        },
+      );
+
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'log_expense', category_slug: null, suggested_category_name: 'Animales', amount: null }),
+      );
+
+      const result = await handleMessage(PHONE, 'text', 'mejor llámala Animales');
+
+      expect(mockedInsertCategory).toHaveBeenCalledWith('user-1', 'Animales', 'animales', '📁');
+      expect(mockedInsertExpense).toHaveBeenCalled();
+      expect(result).toContain('Categoría creada');
+      expect(result).toContain('Animales');
+      expect(result).toContain('✅');
+    });
+
+    it('passes pendingCategoryConfirmation context to parseMessage', async () => {
+      setState(PHONE, {
+        lastAction: 'awaiting_category_confirmation',
+        pendingExpense: suggestedPending,
+        lastExpenseId: null,
+        updatedAt: Date.now(),
+      });
+
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'unknown', amount: null, category_slug: null, description: null }),
+      );
+
+      await handleMessage(PHONE, 'text', 'crea la categoría');
+
+      expect(mockedParseMessage).toHaveBeenCalledWith(
+        'crea la categoría',
+        mockCategories,
+        {
+          pendingCategoryConfirmation: {
+            amount: 120,
+            currency: 'PEN',
+            description: 'veterinario',
+            suggested_category_name: 'Mascotas',
+          },
+        },
+      );
     });
 
     it('creates category and updates expense on confirm during correction flow', async () => {

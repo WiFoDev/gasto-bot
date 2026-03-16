@@ -880,6 +880,8 @@ async function handleMessageInner(
   }
 
   // 6. Handle awaiting_category_confirmation
+  let precomputedResult: ParseResult | null = null;
+
   if (state?.lastAction === 'awaiting_category_confirmation' && state.pendingExpense) {
     const trimmed = content.trim();
 
@@ -960,36 +962,47 @@ async function handleMessageInner(
       return appendAlerts(formatExpenseConfirmation(expense, category), alerts);
     }
 
-    // Before falling through, check if the reply matches an existing category
-    const lowerReply = trimmed.toLowerCase();
-    const matchedCategory = categories.find(
-      (c) =>
-        c.name.toLowerCase() === lowerReply ||
-        c.slug === lowerReply ||
-        lowerReply.includes(c.name.toLowerCase()) ||
-        lowerReply.includes(c.slug),
-    );
+    // Parse the reply with category confirmation context
+    const categoryContext: ParseContext = {
+      pendingCategoryConfirmation: {
+        amount: state.pendingExpense.amount,
+        currency: state.pendingExpense.currency,
+        description: state.pendingExpense.description,
+        suggested_category_name: state.pendingExpense.suggested_category_name!,
+      },
+    };
+    const truncated = trimmed.length > MAX_MESSAGE_LENGTH
+      ? trimmed.slice(0, MAX_MESSAGE_LENGTH)
+      : trimmed;
+    const parsed = await parseMessage(truncated, categories, categoryContext);
 
-    if (matchedCategory) {
+    // AI confirmed category creation (suggested_category_name set, no category_slug)
+    if (parsed.intent === 'log_expense' && parsed.suggested_category_name && !parsed.category_slug) {
+      const suggestedName = parsed.suggested_category_name;
+      const slug = slugify(suggestedName);
+      const icon = '📁';
+      const newCategory = await getCategoryBySlug(user.id, slug)
+        ?? await insertCategory(user.id, suggestedName, slug, icon);
+
       if (state.lastExpenseId) {
-        // Correction flow — update existing expense to matched category
         const existingExpense = await getExpenseById(state.lastExpenseId);
         if (!existingExpense) return formatError();
         const oldCategory = categories.find((c) => c.id === existingExpense.category_id);
         if (!oldCategory) return formatError();
 
-        const updated = await updateExpense(state.lastExpenseId, { category_id: matchedCategory.id });
+        const updated = await updateExpense(state.lastExpenseId, { category_id: newCategory.id });
         setState(phone, {
           lastAction: 'expense_logged',
           pendingExpense: null,
           lastExpenseId: state.lastExpenseId,
           updatedAt: Date.now(),
         });
-        return formatCorrection(updated, oldCategory, matchedCategory);
+        const created = formatCategoryCreated(newCategory);
+        const corrected = formatCorrection(updated, oldCategory, newCategory);
+        return `${created}\n${corrected}`;
       }
 
-      // Normal flow — log expense with matched category
-      const pending = { ...state.pendingExpense, category_slug: matchedCategory.slug, suggested_category_name: null };
+      const pending = { ...state.pendingExpense, category_slug: newCategory.slug };
       const { expense, category } = await resolveAndInsertExpense(user, pending, categories);
       setState(phone, {
         lastAction: 'expense_logged',
@@ -998,16 +1011,50 @@ async function handleMessageInner(
         updatedAt: Date.now(),
       });
       const alerts = await getAllAlerts(user, expense, categories);
-      return appendAlerts(formatExpenseConfirmation(expense, category), alerts);
+      const created = formatCategoryCreated(newCategory);
+      const confirmed = formatExpenseConfirmation(expense, category);
+      return appendAlerts(`${created}\n${confirmed}`, alerts);
     }
 
-    // Unrecognized reply — clear state, fall through to normal parsing
+    // AI picked an existing category
+    if (parsed.intent === 'log_expense' && parsed.category_slug) {
+      const matchedCategory = categories.find((c) => c.slug === parsed.category_slug);
+      if (matchedCategory) {
+        if (state.lastExpenseId) {
+          const existingExpense = await getExpenseById(state.lastExpenseId);
+          if (!existingExpense) return formatError();
+          const oldCategory = categories.find((c) => c.id === existingExpense.category_id);
+          if (!oldCategory) return formatError();
+
+          const updated = await updateExpense(state.lastExpenseId, { category_id: matchedCategory.id });
+          setState(phone, {
+            lastAction: 'expense_logged',
+            pendingExpense: null,
+            lastExpenseId: state.lastExpenseId,
+            updatedAt: Date.now(),
+          });
+          return formatCorrection(updated, oldCategory, matchedCategory);
+        }
+
+        const pending = { ...state.pendingExpense, category_slug: matchedCategory.slug, suggested_category_name: null };
+        const { expense, category } = await resolveAndInsertExpense(user, pending, categories);
+        setState(phone, {
+          lastAction: 'expense_logged',
+          pendingExpense: null,
+          lastExpenseId: expense.id,
+          updatedAt: Date.now(),
+        });
+        const alerts = await getAllAlerts(user, expense, categories);
+        return appendAlerts(formatExpenseConfirmation(expense, category), alerts);
+      }
+    }
+
+    // AI returned a different intent (help, new expense, etc.) — clear state, fall through
     clearState(phone);
+    precomputedResult = parsed;
   }
 
   // 7. Handle awaiting_confirmation
-  let precomputedResult: ParseResult | null = null;
-
   if (state?.lastAction === 'awaiting_confirmation' && state.pendingExpense) {
     const trimmed = content.trim();
     if (CONFIRM_PATTERN.test(trimmed)) {

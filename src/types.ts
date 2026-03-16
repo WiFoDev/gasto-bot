@@ -143,6 +143,12 @@ export interface ParseContext {
     merchant: string | null;
     category_slug: string | null;
   };
+  pendingCategoryConfirmation?: {
+    amount: number;
+    currency: string;
+    description: string | null;
+    suggested_category_name: string;
+  };
 }
 
 // ── Conversation State ────────────────────────────────────────────
