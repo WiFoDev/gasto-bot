@@ -207,7 +207,7 @@
   - Unit tests
   - Depends on: TASK-58, TASK-59, TASK-60
 
-- [ ] TASK-62: Formatter for rules
+- [x] TASK-62: Formatter for rules
   - `formatRuleCreated()`, `formatRuleList()`, `formatRuleDeleted()`, `formatRuleViolation()`
   - Inline snapshot tests
   - Depends on: TASK-61

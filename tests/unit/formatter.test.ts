@@ -27,8 +27,14 @@ import {
   formatCategoryCreated,
   formatCategoryList,
   formatMonthlyClosing,
+  formatRuleCreated,
+  formatRuleDeleted,
+  formatRuleList,
+  formatRuleViolation,
+  formatNoRuleFound,
 } from '../../src/formatter.js';
-import type { Expense, Category, PendingExpense, Budget, SummaryResult, MonthlyClosingData, ReceiptItemParsed } from '../../src/types.js';
+import type { Expense, Category, PendingExpense, Budget, SummaryResult, MonthlyClosingData, ReceiptItemParsed, FinancialRule, RuleType } from '../../src/types.js';
+import type { RuleViolation } from '../../src/rules.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -1438,5 +1444,336 @@ describe('formatMonthlyClosing', () => {
       🛒 Groceries  S/350.00 (19%)
       🎬 Entertainment  S/200.00 (11%)"
     `);
+  });
+});
+
+// ── Financial Rules Helpers ─────────────────────────────────────────
+
+function makeRule(overrides: Partial<FinancialRule> = {}): FinancialRule {
+  return {
+    id: 'rule-1',
+    user_id: 'user-1',
+    name: 'Límite comida semanal',
+    rule_type: 'spending_limit',
+    category_id: 'cat-1',
+    threshold: 200,
+    period: 'weekly',
+    action_value: null,
+    is_active: true,
+    created_at: '2026-03-01T00:00:00Z',
+    ...overrides,
+  };
+}
+
+// ── formatRuleCreated ─────────────────────────────────────────────
+
+describe('formatRuleCreated', () => {
+  it('shows type label and rule name', () => {
+    const result = formatRuleCreated(makeRule(), makeCategory());
+    expect(result).toContain('Regla creada');
+    expect(result).toContain('Límite comida semanal');
+    expect(result).toContain('Límite de gasto');
+  });
+
+  it('shows threshold and period when present', () => {
+    const result = formatRuleCreated(makeRule(), makeCategory());
+    expect(result).toContain('S/200.00');
+    expect(result).toContain('semanal');
+  });
+
+  it('shows category when present', () => {
+    const result = formatRuleCreated(makeRule(), makeCategory());
+    expect(result).toContain('🍽 Food & Dining');
+  });
+
+  it('omits category line when null', () => {
+    const result = formatRuleCreated(makeRule({ category_id: null }), null);
+    expect(result).not.toContain('Categoría');
+  });
+
+  it('shows action_value for payment_default rules', () => {
+    const rule = makeRule({
+      rule_type: 'payment_default',
+      name: 'Siempre con Yape',
+      threshold: null,
+      period: null,
+      action_value: 'Yape',
+    });
+    const result = formatRuleCreated(rule, makeCategory());
+    expect(result).toContain('Yape');
+    expect(result).toContain('Método de pago');
+  });
+
+  it('snapshot: spending limit with category', () => {
+    expect(
+      formatRuleCreated(makeRule(), makeCategory()),
+    ).toMatchInlineSnapshot(`
+      "✅ Regla creada: 💸 Límite de gasto
+      "Límite comida semanal"
+      Límite: S/200.00 semanal
+      Categoría: 🍽 Food & Dining"
+    `);
+  });
+
+  it('snapshot: prohibition without threshold', () => {
+    expect(
+      formatRuleCreated(
+        makeRule({
+          rule_type: 'prohibition',
+          name: 'No gastar en entretenimiento',
+          threshold: null,
+          period: null,
+        }),
+        makeCategory({ name: 'Entertainment', icon: '🎬' }),
+      ),
+    ).toMatchInlineSnapshot(`
+      "✅ Regla creada: 🚫 Prohibición
+      "No gastar en entretenimiento"
+      Categoría: 🎬 Entertainment"
+    `);
+  });
+
+  it('snapshot: payment default rule', () => {
+    expect(
+      formatRuleCreated(
+        makeRule({
+          rule_type: 'payment_default',
+          name: 'Siempre con Yape',
+          threshold: null,
+          period: null,
+          action_value: 'Yape',
+        }),
+        null,
+      ),
+    ).toMatchInlineSnapshot(`
+      "✅ Regla creada: 💳 Método de pago
+      "Siempre con Yape"
+      Valor: Yape"
+    `);
+  });
+
+  it('snapshot: habit rule', () => {
+    expect(
+      formatRuleCreated(
+        makeRule({
+          rule_type: 'habit',
+          name: 'Máximo 50 diarios en comida',
+          threshold: 50,
+          period: 'daily',
+        }),
+        makeCategory(),
+      ),
+    ).toMatchInlineSnapshot(`
+      "✅ Regla creada: 🎯 Hábito
+      "Máximo 50 diarios en comida"
+      Límite: S/50.00 diario
+      Categoría: 🍽 Food & Dining"
+    `);
+  });
+});
+
+// ── formatRuleDeleted ─────────────────────────────────────────────
+
+describe('formatRuleDeleted', () => {
+  it('shows rule name', () => {
+    const result = formatRuleDeleted(makeRule());
+    expect(result).toContain('Límite comida semanal');
+    expect(result).toContain('🗑️');
+  });
+
+  it('snapshot', () => {
+    expect(formatRuleDeleted(makeRule())).toMatchInlineSnapshot(
+      `"🗑️ Regla eliminada: "Límite comida semanal""`,
+    );
+  });
+});
+
+// ── formatRuleList ────────────────────────────────────────────────
+
+describe('formatRuleList', () => {
+  it('shows empty state message', () => {
+    const result = formatRuleList([], []);
+    expect(result).toContain('No tienes reglas activas');
+  });
+
+  it('lists rules with type labels', () => {
+    const rules = [
+      makeRule(),
+      makeRule({ id: 'rule-2', name: 'No entretenimiento', rule_type: 'prohibition', category_id: 'cat-2', threshold: null, period: null }),
+    ];
+    const categories = [
+      makeCategory(),
+      makeCategory({ id: 'cat-2', name: 'Entertainment', icon: '🎬' }),
+    ];
+    const result = formatRuleList(rules, categories);
+    expect(result).toContain('Límite de gasto');
+    expect(result).toContain('Prohibición');
+    expect(result).toContain('Food & Dining');
+    expect(result).toContain('Entertainment');
+  });
+
+  it('shows threshold and period for spending_limit', () => {
+    const result = formatRuleList([makeRule()], [makeCategory()]);
+    expect(result).toContain('S/200.00');
+    expect(result).toContain('semanal');
+  });
+
+  it('shows action_value for payment_default', () => {
+    const rule = makeRule({
+      rule_type: 'payment_default',
+      name: 'Siempre Yape',
+      threshold: null,
+      period: null,
+      action_value: 'Yape',
+      category_id: null,
+    });
+    const result = formatRuleList([rule], []);
+    expect(result).toContain('Yape');
+  });
+
+  it('snapshot: empty list', () => {
+    expect(formatRuleList([], [])).toMatchInlineSnapshot(
+      `"No tienes reglas activas. Prueba "avisa si gasto más de 100 en comida"."`,
+    );
+  });
+
+  it('snapshot: multiple rules', () => {
+    const rules = [
+      makeRule(),
+      makeRule({
+        id: 'rule-2',
+        name: 'No entretenimiento',
+        rule_type: 'prohibition',
+        category_id: 'cat-2',
+        threshold: null,
+        period: null,
+      }),
+      makeRule({
+        id: 'rule-3',
+        name: 'Siempre con Yape',
+        rule_type: 'payment_default',
+        category_id: null,
+        threshold: null,
+        period: null,
+        action_value: 'Yape',
+      }),
+    ];
+    const categories = [
+      makeCategory(),
+      makeCategory({ id: 'cat-2', name: 'Entertainment', icon: '🎬' }),
+    ];
+    expect(formatRuleList(rules, categories)).toMatchInlineSnapshot(`
+      "📋 Tus reglas:
+
+      💸 Límite de gasto: "Límite comida semanal" (S/200.00 semanal) — 🍽 Food & Dining
+      🚫 Prohibición: "No entretenimiento" — 🎬 Entertainment
+      💳 Método de pago: "Siempre con Yape" (Yape)"
+    `);
+  });
+});
+
+// ── formatRuleViolation ───────────────────────────────────────────
+
+describe('formatRuleViolation', () => {
+  it('shows spending limit violation with amounts', () => {
+    const violation: RuleViolation = { rule: makeRule(), spent: 250 };
+    const result = formatRuleViolation(violation, makeCategory());
+    expect(result).toContain('💸');
+    expect(result).toContain('S/250.00');
+    expect(result).toContain('S/200.00');
+    expect(result).toContain('Food & Dining');
+  });
+
+  it('shows prohibition violation', () => {
+    const violation: RuleViolation = {
+      rule: makeRule({ rule_type: 'prohibition', name: 'No entretenimiento', threshold: null, period: null }),
+      spent: null,
+    };
+    const result = formatRuleViolation(violation, makeCategory({ name: 'Entertainment', icon: '🎬' }));
+    expect(result).toContain('🚫');
+    expect(result).toContain('no permitido');
+    expect(result).toContain('Entertainment');
+  });
+
+  it('shows payment default violation', () => {
+    const violation: RuleViolation = {
+      rule: makeRule({ rule_type: 'payment_default', name: 'Siempre Yape', action_value: 'Yape', threshold: null, period: null }),
+      spent: null,
+    };
+    const result = formatRuleViolation(violation, null);
+    expect(result).toContain('💳');
+    expect(result).toContain('Yape');
+  });
+
+  it('shows habit violation with amounts', () => {
+    const violation: RuleViolation = {
+      rule: makeRule({ rule_type: 'habit', name: 'Máximo 50 diarios', threshold: 50, period: 'daily' }),
+      spent: 65,
+    };
+    const result = formatRuleViolation(violation, makeCategory());
+    expect(result).toContain('🎯');
+    expect(result).toContain('S/65.00');
+    expect(result).toContain('S/50.00');
+  });
+
+  it('uses "general" when category is null', () => {
+    const violation: RuleViolation = { rule: makeRule({ category_id: null }), spent: 250 };
+    const result = formatRuleViolation(violation, null);
+    expect(result).toContain('general');
+  });
+
+  it('snapshot: spending limit violation', () => {
+    expect(
+      formatRuleViolation({ rule: makeRule(), spent: 250 }, makeCategory()),
+    ).toMatchInlineSnapshot(
+      `"💸 "Límite comida semanal": llevas S/250.00 de S/200.00 en Food & Dining"`,
+    );
+  });
+
+  it('snapshot: prohibition violation', () => {
+    expect(
+      formatRuleViolation(
+        { rule: makeRule({ rule_type: 'prohibition', name: 'No entretenimiento', threshold: null, period: null }), spent: null },
+        makeCategory({ name: 'Entertainment', icon: '🎬' }),
+      ),
+    ).toMatchInlineSnapshot(
+      `"🚫 "No entretenimiento": gasto en Entertainment no permitido"`,
+    );
+  });
+
+  it('snapshot: payment default violation', () => {
+    expect(
+      formatRuleViolation(
+        { rule: makeRule({ rule_type: 'payment_default', name: 'Siempre Yape', action_value: 'Yape', threshold: null, period: null }), spent: null },
+        null,
+      ),
+    ).toMatchInlineSnapshot(
+      `"💳 "Siempre Yape": método esperado era Yape"`,
+    );
+  });
+
+  it('snapshot: habit violation', () => {
+    expect(
+      formatRuleViolation(
+        { rule: makeRule({ rule_type: 'habit', name: 'Máximo 50 diarios', threshold: 50, period: 'daily' }), spent: 65 },
+        makeCategory(),
+      ),
+    ).toMatchInlineSnapshot(
+      `"🎯 "Máximo 50 diarios": llevas S/65.00 de S/50.00 en Food & Dining"`,
+    );
+  });
+});
+
+// ── formatNoRuleFound ─────────────────────────────────────────────
+
+describe('formatNoRuleFound', () => {
+  it('returns a helpful message', () => {
+    expect(formatNoRuleFound()).toContain('No encontré');
+  });
+
+  it('snapshot', () => {
+    expect(formatNoRuleFound()).toMatchInlineSnapshot(
+      `"No encontré una regla que coincida."`,
+    );
   });
 });
