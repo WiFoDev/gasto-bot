@@ -212,7 +212,7 @@
   - Inline snapshot tests
   - Depends on: TASK-61
 
-- [ ] TASK-63: Integration parse accuracy test for rule intents
+- [x] TASK-63: Integration parse accuracy test for rule intents
   - Verify rule intent fixtures parse correctly
   - Depends on: TASK-60
 
