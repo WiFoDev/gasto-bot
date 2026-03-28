@@ -80,7 +80,7 @@ For "delete_expense": No additional fields needed.
 For "list_categories": No additional fields needed.
 
 For "monthly_closing":
-- "target_month" (required): The month number (1–12). "enero" → 1, "febrero" → 2, "marzo" → 3, etc. If the user says "del mes" or "mensual" without specifying a month, use the previous month.
+- "target_month" (required): The month number (1–12). "enero" → 1, "febrero" → 2, "marzo" → 3, etc. If the user says "del mes" or "mensual" without specifying a month, use the current month.
 - "target_year" (required): The 4-digit year. Default to the current year (${today.slice(0, 4)}). If the target month is greater than the current month, assume the previous year.
 
 For "set_rule":
