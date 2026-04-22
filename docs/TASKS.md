@@ -16,8 +16,6 @@
 ### Phase 1: Dynamic Categories + Payment Methods (Foundation)
 
 > **Philosophy**: Categories emerge from user interactions. The AI suggests new categories when expenses don't fit, and users confirm to create them. Payment methods are tracked per expense.
->
-> **Source**: `ideal-bot-state/financial-advisor.skill`
 
 - [x] TASK-37: Migration + types for dynamic categories and payment methods
   - Create `migrations/002_dynamic_categories_payment.sql`: add `payment_type` (enum) + `payment_method_name` (text) to expenses, add `created_at` to categories
