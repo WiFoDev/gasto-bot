@@ -1,0 +1,212 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 390px;
+  height: auto;
+  min-height: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+  background: #0B141A;
+  color: #E9EDEF;
+  -webkit-font-smoothing: antialiased;
+  font-size: 16px;
+}
+
+.phone { width: 390px; display: flex; flex-direction: column; }
+
+/* iOS-like status bar */
+.status-bar {
+  height: 44px;
+  padding: 0 22px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding-bottom: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+}
+.status-bar .icons { display: flex; gap: 5px; align-items: center; }
+.status-bar .icons svg { width: 17px; height: 11px; }
+
+/* Chat header (WhatsApp) */
+.chat-header {
+  height: 58px;
+  background: #1F2C33;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  gap: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.chat-header .back { color: #00A884; font-size: 26px; line-height: 1; padding: 0 4px; }
+.chat-header .avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: #667781;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; font-weight: 500; color: #fff;
+}
+.chat-header .name {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 17px; font-weight: 500; color: #E9EDEF;
+  flex: 1;
+}
+.chat-header .verified {
+  width: 16px; height: 16px; border-radius: 50%;
+  background: #00A884;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; color: #fff; font-weight: 700;
+}
+.chat-header .call {
+  width: 24px; height: 24px;
+  color: #00A884;
+  opacity: 0.9;
+}
+
+/* Chat body with doodle-less clean background */
+.chat-body {
+  flex: 1;
+  padding: 12px 9px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.date-pill {
+  align-self: center;
+  background: rgba(31, 44, 51, 0.85);
+  color: #8696A0;
+  padding: 5px 12px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 500;
+  margin: 8px 0;
+}
+
+/* Messages */
+.msg {
+  max-width: 85%;
+  padding: 6px 9px 8px;
+  border-radius: 8px;
+  position: relative;
+  font-size: 14.5px;
+  line-height: 1.35;
+  margin-bottom: 2px;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+.msg .time {
+  font-size: 11px;
+  color: rgba(233, 237, 239, 0.6);
+  margin-left: 6px;
+  float: right;
+  margin-top: 4px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.msg .time .ticks {
+  color: #53BDEB;
+  font-size: 13px;
+  line-height: 1;
+}
+.msg.sent {
+  background: #005C4B;
+  align-self: flex-end;
+  border-radius: 8px 8px 2px 8px;
+  margin-right: 2px;
+}
+.msg.received {
+  background: #1F2C33;
+  align-self: flex-start;
+  border-radius: 8px 8px 8px 2px;
+  margin-left: 2px;
+}
+
+.msg strong { font-weight: 600; }
+.msg em { color: #8696A0; font-style: normal; }
+
+/* Receipt image mock (for scene 2) */
+.receipt-img {
+  width: 230px;
+  padding: 3px;
+  background: #1F2C33;
+  border-radius: 8px 8px 8px 2px;
+  align-self: flex-start;
+  margin: 2px 0;
+}
+.receipt-img .thermal {
+  background: #F4EFE6;
+  color: #1a1a1a;
+  padding: 12px 14px 10px;
+  border-radius: 6px;
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 9px;
+  line-height: 1.35;
+  white-space: pre;
+  box-shadow: inset 0 -6px 8px -6px rgba(0,0,0,0.15);
+}
+.receipt-img .thermal .store {
+  text-align: center;
+  font-weight: 700;
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+.receipt-img .thermal .addr {
+  text-align: center;
+  font-size: 8px;
+  margin-bottom: 6px;
+  color: #555;
+}
+.receipt-img .thermal hr {
+  border: none;
+  border-top: 1px dashed #999;
+  margin: 4px 0;
+}
+.receipt-img .meta {
+  padding: 4px 6px 2px;
+  display: flex;
+  justify-content: flex-end;
+  font-size: 11px;
+  color: rgba(233, 237, 239, 0.6);
+  gap: 3px;
+  align-items: center;
+}
+.receipt-img .meta .ticks { color: #53BDEB; font-size: 13px; }
+
+/* Input bar */
+.input-bar {
+  min-height: 60px;
+  background: #0B141A;
+  padding: 6px 8px 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.input-bar .field {
+  flex: 1;
+  background: #1F2C33;
+  border-radius: 22px;
+  height: 38px;
+  padding: 0 14px;
+  display: flex; align-items: center;
+  color: #8696A0;
+  font-size: 14px;
+}
+.input-bar .icon-btn {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  background: #1F2C33;
+  display: flex; align-items: center; justify-content: center;
+  color: #8696A0;
+  font-size: 18px;
+}
+
+/* subtle visual polish: fake pattern */
+.chat-body {
+  background-image:
+    radial-gradient(circle at 15% 25%, rgba(255,255,255,0.012) 0, transparent 40%),
+    radial-gradient(circle at 85% 70%, rgba(255,255,255,0.012) 0, transparent 40%),
+    radial-gradient(circle at 45% 90%, rgba(255,255,255,0.012) 0, transparent 30%);
+  background-color: #0B141A;
+}
