@@ -247,3 +247,13 @@ export interface MonthlyClosingData {
   previousMonthTotal: number;
   budgets: Budget[];
 }
+
+// ── Keep-alive ────────────────────────────────────────────────────
+
+export type ProbeStatus = 'ok' | { error: string };
+
+export interface KeepAliveResult {
+  database: ProbeStatus;
+  timestamp: string;
+  ok: boolean;
+}

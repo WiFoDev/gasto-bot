@@ -35,11 +35,12 @@
 ## Architecture
 - `src/index.ts` — Fastify server, route registration, graceful shutdown
 - `src/config.ts` — env validation, constants (thresholds, TTL, timezone)
-- `src/webhook.ts` — POST /webhook (Kapso payload), GET /health
+- `src/webhook.ts` — POST /webhook (Kapso payload), GET /health, GET+POST /cron/keep-alive
 - `src/handler.ts` — core orchestrator: state check → parse → route intent → respond. Intents: `log_expense`, `query_summary`, `query_budget`, `set_budget`, `correct_expense`, `delete_expense`, `list_categories`, `monthly_closing`, `help`
 - `src/parse.ts` — single Claude Sonnet call per message (intent + extract + categorize)
 - `src/parse-image.ts` — Claude Vision call for receipts
-- `src/db.ts` — Supabase client + 17 query functions
+- `src/db.ts` — Supabase client + 18 query functions (incl. `pingDatabase()` health probe)
+- `src/keep-alive.ts` — free-tier keep-alive probe + constant-time cron bearer auth
 - `src/storage.ts` — download from Kapso → upload to Supabase Storage
 - `src/state.ts` — conversation state Map keyed by phone number
 - `src/formatter.ts` — WhatsApp-optimized response strings
@@ -71,7 +72,7 @@
 - Create a monorepo, Turborepo, or shared-types package
 - Build a separate REST API or core API layer
 - Chain multiple LLM calls per message — single call only
-- Add cron jobs, event-driven triggers, or proactive alerts
+- Add cron jobs, event-driven triggers, or proactive alerts — this bans *product* schedulers (budget warnings, reminders, digests). The infrastructure keep-alive cron (`/cron/keep-alive` + GitHub Actions) is the one deliberate exception; it sends no messages and touches no user data
 - Add multi-user auth, RLS, or onboarding flows
 - Receipt items are sub-items of ONE expense, not multiple expenses
 - Parse multiple expenses from a single message

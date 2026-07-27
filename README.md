@@ -72,7 +72,7 @@ _Screenshots are synthetic mockups with made-up numbers. Source HTML lives in
   single call; Claude Vision for receipt parsing
 - **WhatsApp** — Kapso Cloud API
 - **Hosting** — Railway (persistent process)
-- **Testing** — Vitest, 454 unit tests plus three accuracy gates against the
+- **Testing** — Vitest, 469 unit tests plus three accuracy gates against the
   real Claude API
 
 ---
@@ -118,10 +118,37 @@ Railway URL in production).
 
 ---
 
+## Keeping the free tier awake
+
+Supabase pauses a free-tier project after 7 days without activity, and a
+sleeping Railway container is slow to answer the first webhook. The bot exposes
+an authenticated `GET`/`POST /cron/keep-alive` that runs one cheap query
+against Postgres, and `.github/workflows/keep-alive.yml` calls it once a day.
+
+To enable it:
+
+1. Set `CRON_SECRET` on the Railway service to a random value
+   (`openssl rand -hex 32`).
+2. Add two repository secrets under **Settings → Secrets → Actions**:
+   `CRON_SECRET` (the same value) and `KEEP_ALIVE_URL` (the deployment base
+   URL, e.g. `https://gasto-bot.up.railway.app`).
+3. Trigger the workflow manually once from the Actions tab to verify.
+
+The endpoint answers `200 {"ok":true,"database":"ok"}` on success and
+`200 {"ok":false,"database":{"error":"..."}}` when the probe fails — the
+workflow fails the run on anything else, so a paused database shows up as a
+failed-job email. Requests without a valid `Authorization: Bearer` header get
+`401`, and the endpoint stays closed while `CRON_SECRET` is unset.
+
+Note that GitHub disables scheduled workflows in repos with no commits for 60
+days; re-enable it from the Actions tab if that happens.
+
+---
+
 ## Testing
 
 ```bash
-npm test                      # unit tests — 454 tests, ~350ms
+npm test                      # unit tests — 469 tests, ~350ms
 npx tsc --noEmit              # type check
 npm run test:integration      # real Claude + Supabase calls, ~80s, ~$0.50
 ```

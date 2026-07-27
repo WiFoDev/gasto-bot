@@ -216,6 +216,26 @@
 
 ---
 
+### Phase 5: Infrastructure
+
+- [x] TASK-64: Keep-alive cron to stop free-tier shutdown
+  - Supabase pauses a free project after 7 days idle; a cold Railway container
+    is slow on the first webhook. Railway has no scheduler, so the trigger is
+    GitHub Actions
+  - `pingDatabase()` in `db.ts` (cheapest possible round-trip)
+  - `src/keep-alive.ts`: `runKeepAlive()` (never throws, reports per-probe
+    status) + `isCronAuthorized()` (constant-time bearer check)
+  - `GET`/`POST /cron/keep-alive` in `webhook.ts`, gated on `CRON_SECRET`.
+    Returns 200 even on probe failure so the cron doesn't retry-storm
+  - `.github/workflows/keep-alive.yml` — daily at 09:27 UTC, 3 retries, fails
+    the job when the ping doesn't come back `ok:true`
+  - Unit tests: `tests/unit/keep-alive.test.ts` + keep-alive cases in
+    `tests/unit/webhook.test.ts`
+  - Manual step: set `CRON_SECRET` on Railway and add `CRON_SECRET` +
+    `KEEP_ALIVE_URL` repo secrets
+
+---
+
 ### Future Ideas (Not Scoped)
 
 > These are deferred ideas that don't fit the current WhatsApp architecture or aren't prioritized yet.
