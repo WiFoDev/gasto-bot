@@ -2,8 +2,9 @@ name: keep-alive
 
 # Supabase pauses free-tier projects after 7 days without activity, and a cold
 # Railway service takes a few seconds to answer the first WhatsApp webhook.
-# A daily authenticated ping to /cron/keep-alive touches Postgres and keeps
+# An hourly authenticated ping to /cron/keep-alive touches Postgres and keeps
 # both warm. Railway has no built-in scheduler, so GitHub Actions is the cron.
+# Scheduled runs are free — public repos don't consume Actions minutes.
 #
 # Required repository secrets:
 #   KEEP_ALIVE_URL — deployment base URL, e.g. https://gasto-bot.up.railway.app
@@ -14,9 +15,9 @@ name: keep-alive
 
 on:
   schedule:
-    # 09:27 UTC = 04:27 America/Lima, daily. Off-the-hour on purpose: GitHub's
-    # scheduler is heavily contended at :00 and delays runs by up to an hour.
-    - cron: '27 9 * * *'
+    # Hourly at :27. Off-the-hour on purpose: GitHub's scheduler is heavily
+    # contended at :00 and delays those runs by up to an hour.
+    - cron: '27 * * * *'
   workflow_dispatch:
 
 concurrency:

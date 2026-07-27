@@ -123,7 +123,7 @@ Railway URL in production).
 Supabase pauses a free-tier project after 7 days without activity, and a
 sleeping Railway container is slow to answer the first webhook. The bot exposes
 an authenticated `GET`/`POST /cron/keep-alive` that runs one cheap query
-against Postgres, and `.github/workflows/keep-alive.yml` calls it once a day.
+against Postgres, and `.github/workflows/keep-alive.yml` calls it hourly.
 
 To enable it:
 

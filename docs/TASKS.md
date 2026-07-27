@@ -227,8 +227,8 @@
     status) + `isCronAuthorized()` (constant-time bearer check)
   - `GET`/`POST /cron/keep-alive` in `webhook.ts`, gated on `CRON_SECRET`.
     Returns 200 even on probe failure so the cron doesn't retry-storm
-  - `.github/workflows/keep-alive.yml` — daily at 09:27 UTC, 3 retries, fails
-    the job when the ping doesn't come back `ok:true`
+  - `.github/workflows/keep-alive.yml` — hourly at :27, 3 retries, fails the
+    job when the ping doesn't come back `ok:true`
   - Unit tests: `tests/unit/keep-alive.test.ts` + keep-alive cases in
     `tests/unit/webhook.test.ts`
   - Manual step: set `CRON_SECRET` on Railway and add `CRON_SECRET` +
