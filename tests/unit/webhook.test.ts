@@ -20,11 +20,19 @@ vi.mock('@kapso/whatsapp-cloud-api', () => ({
 vi.mock('../../src/config.js', () => ({
   KAPSO_API_KEY: 'test-kapso-key',
   KAPSO_WEBHOOK_SECRET: 'test-webhook-secret',
+  CRON_SECRET: 'test-cron-secret',
+}));
+
+const mockPingDatabase = vi.fn().mockResolvedValue(undefined);
+
+vi.mock('../../src/db.js', () => ({
+  pingDatabase: () => mockPingDatabase(),
 }));
 
 // ── Helpers ──────────────────────────────────────────────────────
 
 const WEBHOOK_SECRET = 'test-webhook-secret';
+const CRON_SECRET = 'test-cron-secret';
 
 function sign(payload: Record<string, unknown>): string {
   return crypto
@@ -109,6 +117,66 @@ describe('webhook plugin', () => {
     const res = await app.inject({ method: 'GET', url: '/health' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ status: 'ok' });
+  });
+
+  // ── Keep-alive cron ──────────────────────────────────────────
+
+  function injectKeepAlive(
+    app: ReturnType<typeof Fastify>,
+    token?: string,
+    method: 'GET' | 'POST' = 'GET',
+  ) {
+    return app.inject({
+      method,
+      url: '/cron/keep-alive',
+      headers: token ? { authorization: `Bearer ${token}` } : {},
+    });
+  }
+
+  it('GET /cron/keep-alive pings the database with a valid token', async () => {
+    const { app } = await buildApp();
+    const res = await injectKeepAlive(app, CRON_SECRET);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, database: 'ok' });
+    expect(mockPingDatabase).toHaveBeenCalledTimes(1);
+  });
+
+  it('POST /cron/keep-alive works the same as GET', async () => {
+    const { app } = await buildApp();
+    const res = await injectKeepAlive(app, CRON_SECRET, 'POST');
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, database: 'ok' });
+  });
+
+  it('rejects keep-alive without a token and never touches the DB', async () => {
+    const { app } = await buildApp();
+    const res = await injectKeepAlive(app);
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ error: 'Unauthorized' });
+    expect(mockPingDatabase).not.toHaveBeenCalled();
+  });
+
+  it('rejects keep-alive with a wrong token', async () => {
+    const { app } = await buildApp();
+    const res = await injectKeepAlive(app, 'wrong-cron-secret');
+
+    expect(res.statusCode).toBe(401);
+    expect(mockPingDatabase).not.toHaveBeenCalled();
+  });
+
+  it('returns 200 with ok:false when the DB probe fails', async () => {
+    mockPingDatabase.mockRejectedValueOnce(new Error('connection refused'));
+    const { app } = await buildApp();
+    const res = await injectKeepAlive(app, CRON_SECRET);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      ok: false,
+      database: { error: 'connection refused' },
+    });
   });
 
   // ── Signature validation ─────────────────────────────────────

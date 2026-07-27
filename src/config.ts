@@ -18,6 +18,10 @@ export const KAPSO_WEBHOOK_SECRET = requireEnv('KAPSO_WEBHOOK_SECRET');
 
 export const PORT = parseInt(process.env.PORT || '3000', 10);
 
+// Shared secret for the keep-alive cron endpoint. Optional so the server still
+// boots without it — the endpoint rejects every request while it is unset.
+export const CRON_SECRET = process.env.CRON_SECRET;
+
 // ── Constants ─────────────────────────────────────────────────────
 
 export const CONFIDENCE_AUTO_LOG = 0.85;

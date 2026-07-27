@@ -1,8 +1,10 @@
 import crypto from 'node:crypto';
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { WhatsAppClient } from '@kapso/whatsapp-cloud-api';
-import { KAPSO_API_KEY, KAPSO_WEBHOOK_SECRET } from './config.js';
+import { CRON_SECRET, KAPSO_API_KEY, KAPSO_WEBHOOK_SECRET } from './config.js';
+import { pingDatabase } from './db.js';
 import { formatError, formatUnsupportedMedia } from './formatter.js';
+import { isCronAuthorized, runKeepAlive } from './keep-alive.js';
 import type { KapsoWebhookPayload, MessageHandler } from './types.js';
 
 // ── Deduplication ───────────────────────────────────────────────
@@ -47,6 +49,35 @@ const webhookPlugin: FastifyPluginAsync<WebhookPluginOptions> = async (
 
   fastify.get('/health', async () => {
     return { status: 'ok' };
+  });
+
+  // ── Keep-alive cron ──────────────────────────────────────────
+  // Triggered by an external scheduler (GitHub Actions). Touching the DB keeps
+  // the Supabase free-tier project from pausing; the request itself keeps the
+  // Railway service warm. Always answers 200 on a probe failure so the cron
+  // doesn't retry-storm — the per-probe status is in the body.
+
+  fastify.route({
+    method: ['GET', 'POST'],
+    url: '/cron/keep-alive',
+    handler: async (request, reply) => {
+      if (!isCronAuthorized(request.headers.authorization, CRON_SECRET)) {
+        console.log(
+          JSON.stringify({
+            event: 'keep_alive_rejected',
+            reason: CRON_SECRET ? 'invalid_token' : 'secret_not_configured',
+            timestamp: new Date().toISOString(),
+          }),
+        );
+        return reply.status(401).send({ error: 'Unauthorized' });
+      }
+
+      const result = await runKeepAlive({ pingDatabase });
+
+      console.log(JSON.stringify({ event: 'keep_alive', ...result }));
+
+      return reply.status(200).send(result);
+    },
   });
 
   // ── Webhook ──────────────────────────────────────────────────

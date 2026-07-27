@@ -1,0 +1,71 @@
+name: keep-alive
+
+# Supabase pauses free-tier projects after 7 days without activity, and a cold
+# Railway service takes a few seconds to answer the first WhatsApp webhook.
+# A daily authenticated ping to /cron/keep-alive touches Postgres and keeps
+# both warm. Railway has no built-in scheduler, so GitHub Actions is the cron.
+#
+# Required repository secrets:
+#   KEEP_ALIVE_URL — deployment base URL, e.g. https://gasto-bot.up.railway.app
+#   CRON_SECRET    — same value as the CRON_SECRET env var on Railway
+#
+# NOTE: GitHub disables scheduled workflows in repos with no commits for 60
+# days. If that happens, re-enable it from the Actions tab.
+
+on:
+  schedule:
+    # 09:27 UTC = 04:27 America/Lima, daily. Off-the-hour on purpose: GitHub's
+    # scheduler is heavily contended at :00 and delays runs by up to an hour.
+    - cron: '27 9 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: keep-alive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    name: Ping Supabase via the bot
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping /cron/keep-alive
+        env:
+          KEEP_ALIVE_URL: ${{ secrets.KEEP_ALIVE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${KEEP_ALIVE_URL}" ] || [ -z "${CRON_SECRET}" ]; then
+            echo "::error::KEEP_ALIVE_URL and CRON_SECRET repository secrets must both be set"
+            exit 1
+          fi
+
+          url="${KEEP_ALIVE_URL%/}/cron/keep-alive"
+          status=""
+          body=""
+
+          # Retry: a sleeping Railway container can drop the first request while
+          # it cold-starts, and that is exactly the case we are pinging to fix.
+          for attempt in 1 2 3; do
+            response=$(curl -sS --max-time 30 -w '\n%{http_code}' \
+              -H "Authorization: Bearer ${CRON_SECRET}" \
+              "${url}" || true)
+
+            status=$(printf '%s' "${response}" | tail -n1)
+            body=$(printf '%s' "${response}" | sed '$d')
+
+            echo "attempt ${attempt}: HTTP ${status:-none} — ${body:-<empty>}"
+
+            if [ "${status}" = "200" ] && printf '%s' "${body}" | grep -q '"ok":true'; then
+              echo "::notice::Supabase pinged successfully"
+              exit 0
+            fi
+
+            if [ "${attempt}" -lt 3 ]; then
+              sleep 15
+            fi
+          done
+
+          echo "::error::keep-alive failed after 3 attempts — last response: HTTP ${status:-none} ${body:-<empty>}"
+          exit 1

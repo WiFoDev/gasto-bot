@@ -4,6 +4,19 @@ import type { User, Category, Expense, CategoryTotal, SummaryResult, Budget, Mon
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// ── Health probe ────────────────────────────────────────────────────
+
+/**
+ * Cheapest possible round-trip to Postgres. Used by the keep-alive cron to
+ * register activity on the Supabase project so the free tier doesn't pause it.
+ */
+export async function pingDatabase(): Promise<void> {
+  const { error } = await supabase.from('users').select('id').limit(1);
+  if (error) throw error;
+}
+
+// ── User & category queries ─────────────────────────────────────────
+
 export async function getUserByPhone(phone: string): Promise<User | null> {
   const { data, error } = await supabase
     .from('users')
