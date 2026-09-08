@@ -72,7 +72,7 @@
 - Create a monorepo, Turborepo, or shared-types package
 - Build a separate REST API or core API layer
 - Chain multiple LLM calls per message — single call only
-- Add cron jobs, event-driven triggers, or proactive alerts — this bans *product* schedulers (budget warnings, reminders, digests). The infrastructure keep-alive cron (`/cron/keep-alive` + GitHub Actions) is the one deliberate exception; it sends no messages and touches no user data
+- Add cron jobs, event-driven triggers, or proactive alerts — this bans *product* schedulers (budget warnings, reminders, digests). Two deliberate exceptions: (1) the infrastructure keep-alive cron (`/cron/keep-alive` + GitHub Actions), which sends no messages and touches no user data; (2) the bank-email channel (`POST /inbound/bank-email`, Phase 6), which is a *reply* to a bank notification the user forwarded — it registers the expense and sends exactly one WhatsApp message per email, never on a schedule, never batched, never a reminder. Anything time-triggered that talks to the user is still banned
 - Add multi-user auth, RLS, or onboarding flows
 - Receipt items are sub-items of ONE expense, not multiple expenses
 - Parse multiple expenses from a single message

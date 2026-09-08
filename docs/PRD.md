@@ -297,6 +297,8 @@ User sets budgets and checks them on demand. No proactive alerts in Phase 1.
 | Agent pattern orchestration (routing → chaining → evaluation) | Single LLM call |
 | Haiku for routing | Not cost-justified at personal scale |
 
+> **Phase 6 update (2026-09):** bank *email* ingestion for BCP card notifications is now in scope — see §22. Statement imports, account linking (Plaid/open banking) and inbox access (Gmail API/OAuth) remain out.
+
 ---
 
 ## 12. Tech Stack — Phase 1
@@ -704,6 +706,7 @@ Phase 2 introduces the structural changes needed to support multiple clients and
 - Upload CSV or PDF bank statement via web dashboard
 - Parse and categorize transactions in bulk
 - Deduplication against manually logged expenses
+- **Phase 6 note:** real-time BCP email ingestion (§22) covers card purchases going forward; this import stays the path for retroactive data
 
 ### P2-F6: Agent Pattern Upgrade
 
@@ -756,10 +759,60 @@ After 30 days of Phase 1 use, rank these based on actual pain points:
 | Lower | Bank Import (P2-F5) | You want retroactive data |
 | Defer | Agent Pattern Upgrade (P2-F6) | Single-call accuracy is provably insufficient |
 | Defer | Monorepo (P2-F8) | You have 2+ apps sharing code |
+| In progress | Bank Email Ingestion (§22, Phase 6) | Typing ~5 card purchases a day was the top daily friction |
 
 ---
 
-## 22. Summary
+## 22. Bank Email Ingestion — Phase 6 (BCP)
+
+**Added 2026-09-08.** Phase 1 proved the WhatsApp habit. Phase 6 removes the typing for the largest expense source — the credit card — without changing the WhatsApp contract. Manual entry stays for everything the bank doesn't email (cash, Yape/Plin).
+
+### Why now
+
+- BCP already emails a per-purchase notification (`Realizaste un consumo con tu Tarjeta de Crédito BCP`) from `notificaciones@notificacionesbcp.com.pe` with amount + currency (`S/` or `$`), merchant (`Empresa`), local date/time, card last 4 and a 10-digit operation number.
+- The primary user makes ~5 card purchases a day; each one currently has to be typed.
+- The email is a fixed template, so extraction is deterministic. The only judgment call is the category.
+
+### F7: Bank Email Auto-Logging (BCP)
+
+- **Input:** BCP purchase notifications, auto-forwarded by a Gmail filter to a private inbound address (`gastos-<random>@<domain>`).
+- **Ingestion:** Cloudflare Email Routing → Email Worker → `POST /inbound/bank-email` on Railway (bearer secret + sender allowlist). No OAuth, no Gmail API, no inbox access.
+- **Extraction:** Regex over the email body, no LLM. Date comes from the email body (Lima local), not from arrival time.
+- **Category:** Merchant memory first — the last confirmed category for that normalized merchant (`DLC*UBER RIDES` → `UBER RIDES`). Otherwise ONE Claude call on merchant + amount + the user's categories, same dynamic-category contract as text parsing. Never asks a question; low confidence falls back to `other`.
+- **Storage:** `expenses.source = 'email'`, `payment_type = 'credit_card'`, `payment_method_name = 'BCP ***1234'`, `bank_reference = bcp:<operation_number>` (unique per user → idempotent). USD purchases are stored as USD, like manual USD entries.
+- **Response:** exactly one WhatsApp confirmation per email, e.g. `🏦 BCP · S/ 34.00 en Sienna Bakery → Comida`, plus budget/rule alerts if any. Best-effort: the expense is stored even if the send fails. Outside Meta's 24h customer-service window the bot falls back to a pre-approved utility template.
+- **Corrections:** the confirmation sets conversation state, so the existing correct/delete intents apply ("eso fue transporte", "borra eso"). Because of merchant memory, one correction fixes every future email from that merchant.
+- **Dedup:** same email twice → ignored by `bank_reference`. Manual entry with the same amount, currency and date within ±6h → linked, not duplicated.
+
+### Guardrails (what this is NOT)
+
+- **Not a scheduler.** One inbound email → one reply. No digests, reminders or timed budget warnings. `CLAUDE.md` names this as the second deliberate exception next to the keep-alive cron.
+- **Not inbox access.** The bot only sees what the user's own Gmail filter forwards.
+- **Not multi-bank or multi-user.** BCP + the single default user. Another bank is another parser behind the same route.
+- **Still one LLM call per event**, and zero for known merchants.
+
+### Validation gates
+
+| Gate | Criterion |
+|---|---|
+| GATE #4 | BCP parser: 100% field accuracy on the email fixtures (deterministic parser, no tolerance) |
+| GATE #5 | Merchant categorizer: ≥ 80% agreement with hand labels on ~20 real BCP merchant strings |
+| GATE #6 | Manual E2E: a real purchase produces a WhatsApp confirmation within 60s and shows up in `mis gastos hoy` |
+
+### Success criteria (30 days of use)
+
+- ≥ 90% of card purchases logged without typing anything.
+- Category correction rate on email expenses < 15% after the first two weeks.
+- Zero duplicate expenses from forwarder retries or manual overlap.
+
+### Open decisions
+
+- Domain on Cloudflare for Email Routing (free) vs. a paid inbound-parse provider (Postmark/Resend). Decide before TASK-73.
+- Whether USD expenses should be converted for summaries — out of scope here, tracked under "Multi-currency dashboard" in Future Ideas.
+
+---
+
+## 23. Summary
 
 **Phase 1 is a bet on the habit, not the architecture.** You're testing whether WhatsApp expense logging sticks as a daily behavior. Everything is optimized for speed to that answer: single project, single LLM call, direct database access, minimal infrastructure.
 
