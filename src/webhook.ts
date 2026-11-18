@@ -5,7 +5,12 @@ import { CRON_SECRET, KAPSO_API_KEY, KAPSO_WEBHOOK_SECRET } from './config.js';
 import { pingDatabase } from './db.js';
 import { formatError, formatUnsupportedMedia } from './formatter.js';
 import { isCronAuthorized, runKeepAlive } from './keep-alive.js';
-import type { KapsoWebhookPayload, MessageHandler } from './types.js';
+import type {
+  BotReply,
+  InboundMessageType,
+  KapsoWebhookPayload,
+  MessageHandler,
+} from './types.js';
 
 // ── Deduplication ───────────────────────────────────────────────
 
@@ -171,7 +176,7 @@ const webhookPlugin: FastifyPluginAsync<WebhookPluginOptions> = async (
     }
 
     // Determine message type and content
-    let messageType: 'text' | 'image';
+    let messageType: InboundMessageType;
     let content: string;
 
     if (message.type === 'text' && message.text?.body) {
@@ -185,6 +190,13 @@ const webhookPlugin: FastifyPluginAsync<WebhookPluginOptions> = async (
         message.image?.link ??
         message.image?.id ??
         '';
+    } else if (
+      message.type === 'interactive' &&
+      message.interactive?.type === 'button_reply' &&
+      message.interactive.button_reply?.id
+    ) {
+      messageType = 'button';
+      content = message.interactive.button_reply.id;
     } else {
       // Unsupported message type — reply with a helpful message
       console.log(
@@ -222,9 +234,9 @@ const webhookPlugin: FastifyPluginAsync<WebhookPluginOptions> = async (
     }));
 
     // Process message through handler
-    let responseText: string;
+    let botReply: BotReply;
     try {
-      responseText = await handleMessage(phone, messageType, content);
+      botReply = await handleMessage(phone, messageType, content);
     } catch (err) {
       console.log(
         JSON.stringify({
@@ -234,16 +246,41 @@ const webhookPlugin: FastifyPluginAsync<WebhookPluginOptions> = async (
           timestamp: new Date().toISOString(),
         }),
       );
-      responseText = formatError();
+      botReply = { text: formatError() };
     }
 
-    // Send reply via Kapso
+    // Send reply via Kapso — as reply buttons when present, plain text otherwise.
+    // A failed button send falls back to text so the prompt is never lost
+    // (typed "sí"/"no" still works).
     try {
-      await kapsoClient.messages.sendText({
-        phoneNumberId: phone_number_id,
-        to: phone,
-        body: responseText,
-      });
+      let sent = false;
+      if (botReply.buttons?.length) {
+        try {
+          await kapsoClient.messages.sendInteractiveButtons({
+            phoneNumberId: phone_number_id,
+            to: phone,
+            bodyText: botReply.text,
+            buttons: botReply.buttons,
+          });
+          sent = true;
+        } catch (err) {
+          console.log(
+            JSON.stringify({
+              event: 'kapso_buttons_error',
+              error: err instanceof Error ? err.message : String(err),
+              phone,
+              timestamp: new Date().toISOString(),
+            }),
+          );
+        }
+      }
+      if (!sent) {
+        await kapsoClient.messages.sendText({
+          phoneNumberId: phone_number_id,
+          to: phone,
+          body: botReply.text,
+        });
+      }
     } catch (err) {
       console.log(
         JSON.stringify({

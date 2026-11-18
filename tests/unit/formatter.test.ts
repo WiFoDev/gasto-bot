@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
+  BUTTON_IDS,
+  expenseConfirmButtons,
+  newCategoryButtons,
+  formatButtonExpired,
   formatExpenseConfirmation,
   formatClarification,
   formatCorrection,
@@ -1774,6 +1778,36 @@ describe('formatNoRuleFound', () => {
   it('snapshot', () => {
     expect(formatNoRuleFound()).toMatchInlineSnapshot(
       `"No encontré una regla que coincida."`,
+    );
+  });
+});
+
+describe('confirmation buttons', () => {
+  it('expenseConfirmButtons returns Guardar / Cancelar', () => {
+    expect(expenseConfirmButtons()).toEqual([
+      { id: BUTTON_IDS.expenseConfirm, title: '✅ Guardar' },
+      { id: BUTTON_IDS.expenseCancel, title: '❌ Cancelar' },
+    ]);
+  });
+
+  it('newCategoryButtons returns Crear / Usar Otros', () => {
+    expect(newCategoryButtons()).toEqual([
+      { id: BUTTON_IDS.categoryCreate, title: '✅ Crear' },
+      { id: BUTTON_IDS.categoryOther, title: '📁 Usar Otros' },
+    ]);
+  });
+
+  it('button ids are distinct and titles fit WhatsApp\'s 20-char limit', () => {
+    const buttons = [...expenseConfirmButtons(), ...newCategoryButtons()];
+    expect(new Set(buttons.map((b) => b.id)).size).toBe(buttons.length);
+    for (const b of buttons) {
+      expect([...b.title].length).toBeLessThanOrEqual(20);
+    }
+  });
+
+  it('formatButtonExpired', () => {
+    expect(formatButtonExpired()).toMatchInlineSnapshot(
+      `"Ese botón ya no está activo. Si querías registrar un gasto, envíamelo de nuevo."`,
     );
   });
 });

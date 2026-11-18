@@ -11,9 +11,18 @@ const mockSendText = vi.fn().mockResolvedValue({
   messages: [{ id: 'wamid.reply123' }],
 });
 
+const mockSendInteractiveButtons = vi.fn().mockResolvedValue({
+  messagingProduct: 'whatsapp',
+  contacts: [],
+  messages: [{ id: 'wamid.buttons123' }],
+});
+
 vi.mock('@kapso/whatsapp-cloud-api', () => ({
   WhatsAppClient: class {
-    messages = { sendText: mockSendText };
+    messages = {
+      sendText: mockSendText,
+      sendInteractiveButtons: mockSendInteractiveButtons,
+    };
   },
 }));
 
@@ -63,7 +72,7 @@ function makePayload(overrides: Record<string, unknown> = {}) {
 }
 
 async function buildApp(
-  handleMessage = vi.fn().mockResolvedValue('OK logged'),
+  handleMessage = vi.fn().mockResolvedValue({ text: 'OK logged' }),
 ) {
   const { default: webhookPlugin } = await import('../../src/webhook.js');
   const app = Fastify();
@@ -228,7 +237,7 @@ describe('webhook plugin', () => {
   // ── Text message handling ────────────────────────────────────
 
   it('processes text message and sends reply', async () => {
-    const handler = vi.fn().mockResolvedValue('Logged S/35.00');
+    const handler = vi.fn().mockResolvedValue({ text: 'Logged S/35.00' });
     const { app } = await buildApp(handler);
     const payload = makePayload();
     const res = await inject(app, payload, sign(payload));
@@ -250,7 +259,7 @@ describe('webhook plugin', () => {
   // ── Image message handling ───────────────────────────────────
 
   it('processes image message with kapso mediaUrl', async () => {
-    const handler = vi.fn().mockResolvedValue('Receipt processed');
+    const handler = vi.fn().mockResolvedValue({ text: 'Receipt processed' });
     const { app } = await buildApp(handler);
     const payload = makePayload({
       message: {
@@ -276,7 +285,7 @@ describe('webhook plugin', () => {
   });
 
   it('falls back to image.link when kapso mediaUrl is absent', async () => {
-    const handler = vi.fn().mockResolvedValue('Receipt processed');
+    const handler = vi.fn().mockResolvedValue({ text: 'Receipt processed' });
     const { app } = await buildApp(handler);
     const payload = makePayload({
       message: {
@@ -372,7 +381,7 @@ describe('webhook plugin', () => {
   });
 
   it('still returns 200 when Kapso send fails', async () => {
-    const handler = vi.fn().mockResolvedValue('reply text');
+    const handler = vi.fn().mockResolvedValue({ text: 'reply text' });
     mockSendText.mockRejectedValueOnce(new Error('Kapso timeout'));
     const { app } = await buildApp(handler);
     const payload = makePayload();
@@ -385,7 +394,7 @@ describe('webhook plugin', () => {
   // ── Duplicate message handling ──────────────────────────────────
 
   it('skips duplicate messages with same ID', async () => {
-    const handler = vi.fn().mockResolvedValue('OK');
+    const handler = vi.fn().mockResolvedValue({ text: 'OK' });
     const { app } = await buildApp(handler);
     const payload = makePayload();
 
@@ -403,7 +412,7 @@ describe('webhook plugin', () => {
   });
 
   it('processes messages with different IDs', async () => {
-    const handler = vi.fn().mockResolvedValue('OK');
+    const handler = vi.fn().mockResolvedValue({ text: 'OK' });
     const { app } = await buildApp(handler);
 
     const payload1 = makePayload();
@@ -449,5 +458,101 @@ describe('webhook plugin', () => {
         body: 'Solo puedo procesar texto y fotos por ahora.',
       }),
     );
+  });
+
+  // ── Interactive reply buttons (TASK-77) ─────────────────────────
+
+  function buttonPayload(id: string, messageId = 'wamid.btn1') {
+    return makePayload({
+      message: {
+        id: messageId,
+        type: 'interactive',
+        timestamp: '1730092800',
+        interactive: {
+          type: 'button_reply',
+          button_reply: { id, title: '✅ Guardar' },
+        },
+        kapso: { direction: 'inbound' },
+      },
+    });
+  }
+
+  it('passes a button tap to the handler as type "button" with the button id', async () => {
+    const handler = vi.fn().mockResolvedValue({ text: 'Guardado' });
+    const { app } = await buildApp(handler);
+    const payload = buttonPayload('expense_confirm');
+    const res = await inject(app, payload, sign(payload));
+
+    expect(res.statusCode).toBe(200);
+    expect(handler).toHaveBeenCalledWith('+51999888777', 'button', 'expense_confirm');
+    expect(mockSendText).toHaveBeenCalledWith(
+      expect.objectContaining({ body: 'Guardado' }),
+    );
+  });
+
+  it('treats non-button interactive messages as unsupported', async () => {
+    const handler = vi.fn();
+    const { app } = await buildApp(handler);
+    const payload = makePayload({
+      message: {
+        id: 'wamid.list1',
+        type: 'interactive',
+        timestamp: '1730092800',
+        interactive: { type: 'list_reply', list_reply: { id: 'x', title: 'X' } },
+        kapso: { direction: 'inbound' },
+      },
+    });
+    const res = await inject(app, payload, sign(payload));
+
+    expect(res.json()).toEqual({ status: 'unsupported_type' });
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('sends interactive buttons when the reply has buttons', async () => {
+    const buttons = [
+      { id: 'expense_confirm', title: '✅ Guardar' },
+      { id: 'expense_cancel', title: '❌ Cancelar' },
+    ];
+    const handler = vi.fn().mockResolvedValue({ text: '¿Lo registro?', buttons });
+    const { app } = await buildApp(handler);
+    const payload = makePayload();
+    const res = await inject(app, payload, sign(payload));
+
+    expect(res.statusCode).toBe(200);
+    expect(mockSendInteractiveButtons).toHaveBeenCalledWith({
+      phoneNumberId: 'pn_12345',
+      to: '+51999888777',
+      bodyText: '¿Lo registro?',
+      buttons,
+    });
+    expect(mockSendText).not.toHaveBeenCalled();
+  });
+
+  it('falls back to plain text when sending buttons fails', async () => {
+    mockSendInteractiveButtons.mockRejectedValueOnce(new Error('Kapso 400'));
+    const handler = vi.fn().mockResolvedValue({
+      text: '¿Lo registro?',
+      buttons: [{ id: 'expense_confirm', title: '✅ Guardar' }],
+    });
+    const { app } = await buildApp(handler);
+    const payload = makePayload();
+    const res = await inject(app, payload, sign(payload));
+
+    expect(res.statusCode).toBe(200);
+    expect(mockSendText).toHaveBeenCalledWith({
+      phoneNumberId: 'pn_12345',
+      to: '+51999888777',
+      body: '¿Lo registro?',
+    });
+  });
+
+  it('sends plain text when the reply has an empty buttons array', async () => {
+    const handler = vi.fn().mockResolvedValue({ text: 'Hola', buttons: [] });
+    const { app } = await buildApp(handler);
+    const payload = makePayload();
+    await inject(app, payload, sign(payload));
+
+    expect(mockSendInteractiveButtons).not.toHaveBeenCalled();
+    expect(mockSendText).toHaveBeenCalledWith(expect.objectContaining({ body: 'Hola' }));
   });
 });

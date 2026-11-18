@@ -57,12 +57,26 @@ import {
   formatRuleList,
   formatRuleViolation,
   formatNoRuleFound,
+  formatButtonExpired,
+  expenseConfirmButtons,
+  newCategoryButtons,
+  BUTTON_IDS,
 } from './formatter.js';
 import { slugify } from './utils.js';
 import { checkRules } from './rules.js';
 import type { PeriodSpending } from './rules.js';
 import { CONFIDENCE_AUTO_LOG, CONFIDENCE_CONFIRM } from './config.js';
-import type { Category, Expense, ParseContext, ParseResult, PendingExpense, User } from './types.js';
+import type {
+  BotReply,
+  Category,
+  Expense,
+  InboundMessageType,
+  LastAction,
+  ParseContext,
+  ParseResult,
+  PendingExpense,
+  User,
+} from './types.js';
 
 function getTodayDate(timezone: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date());
@@ -334,7 +348,7 @@ async function handleLogExpense(
   categories: Category[],
   result: ParseResult,
   rawInput: string,
-): Promise<string> {
+): Promise<string | BotReply> {
   const today = getTodayDate(user.timezone);
 
   const pending: PendingExpense = {
@@ -369,7 +383,10 @@ async function handleLogExpense(
         lastExpenseId: null,
         updatedAt: Date.now(),
       });
-      return formatNewCategoryConfirmation(pending, result.suggested_category_name);
+      return {
+        text: formatNewCategoryConfirmation(pending, result.suggested_category_name),
+        buttons: newCategoryButtons(),
+      };
     }
   }
 
@@ -407,7 +424,10 @@ async function handleLogExpense(
       categories.find((c) => c.slug === 'other') ??
       categories[0];
 
-    return buildConfirmationMessage(pending, resolvedCategory);
+    return {
+      text: buildConfirmationMessage(pending, resolvedCategory),
+      buttons: expenseConfirmButtons(),
+    };
   }
 
   // Low confidence — ask for clarification
@@ -436,7 +456,7 @@ async function handleCorrectExpense(
   user: User,
   categories: Category[],
   result: ParseResult,
-): Promise<string> {
+): Promise<string | BotReply> {
   const expense = await resolveLastExpense(phone, user);
   if (!expense) {
     return formatNoExpenseToModify();
@@ -484,7 +504,10 @@ async function handleCorrectExpense(
         lastExpenseId: expense.id,
         updatedAt: Date.now(),
       });
-      return formatNewCategoryConfirmation(pending, result.suggested_category_name);
+      return {
+        text: formatNewCategoryConfirmation(pending, result.suggested_category_name),
+        buttons: newCategoryButtons(),
+      };
     }
   }
   if (result.correction_field === 'amount' && result.amount != null) {
@@ -577,7 +600,7 @@ async function handleImageMessage(
   user: User,
   categories: Category[],
   mediaUrl: string,
-): Promise<string> {
+): Promise<string | BotReply> {
   // 1. Download image immediately (Kapso URLs expire quickly)
   let buffer: Buffer;
   let contentType: string;
@@ -640,7 +663,10 @@ async function handleImageMessage(
       updatedAt: Date.now(),
     });
 
-    return formatReceiptConfirmation(pending, category);
+    return {
+      text: formatReceiptConfirmation(pending, category),
+      buttons: expenseConfirmButtons(),
+    };
   }
 
   // 5. Low confidence — ask user for details
@@ -802,6 +828,14 @@ const MAX_MESSAGE_LENGTH = 500;
 const CONFIRM_PATTERN = /^(yes|y|yep|yeah|sure|si|sí|sip|sep|ok|okay|dale|claro|va)$/i;
 const DENY_PATTERN = /^(no|nop|nope|nah|nel|cancel|cancelar)$/i;
 
+/** Button id → the state it answers + the equivalent typed reply. */
+const BUTTON_REPLIES: Record<string, { state: LastAction; text: string }> = {
+  [BUTTON_IDS.expenseConfirm]: { state: 'awaiting_confirmation', text: 'si' },
+  [BUTTON_IDS.expenseCancel]: { state: 'awaiting_confirmation', text: 'no' },
+  [BUTTON_IDS.categoryCreate]: { state: 'awaiting_category_confirmation', text: 'si' },
+  [BUTTON_IDS.categoryOther]: { state: 'awaiting_category_confirmation', text: 'no' },
+};
+
 function classifyError(error: unknown): string {
   if (typeof error === 'object' && error !== null) {
     const name = (error as { constructor?: { name?: string } }).constructor?.name ?? '';
@@ -815,9 +849,21 @@ function classifyError(error: unknown): string {
 
 export async function handleMessage(
   phone: string,
-  type: 'text' | 'image',
+  type: InboundMessageType,
   content: string,
-): Promise<string> {
+): Promise<BotReply> {
+  return toReply(await handleMessageSafe(phone, type, content));
+}
+
+function toReply(reply: string | BotReply): BotReply {
+  return typeof reply === 'string' ? { text: reply } : reply;
+}
+
+async function handleMessageSafe(
+  phone: string,
+  type: InboundMessageType,
+  content: string,
+): Promise<string | BotReply> {
   try {
     return await handleMessageInner(phone, type, content);
   } catch (error) {
@@ -837,9 +883,11 @@ export async function handleMessage(
 
 async function handleMessageInner(
   phone: string,
-  type: 'text' | 'image',
-  content: string,
-): Promise<string> {
+  type: InboundMessageType,
+  rawContent: string,
+): Promise<string | BotReply> {
+  let content = rawContent;
+
   // 1. Get user — normalize phone to E.164 (+country format)
   const normalizedPhone = phone.startsWith('+') ? phone : `+${phone}`;
   const user = await getUserByPhone(normalizedPhone);
@@ -857,6 +905,17 @@ async function handleMessageInner(
 
   // 4. Check conversation state
   const state = getState(phone);
+
+  // 4b. Button tap — map onto the typed confirm/deny reply for the state it
+  // belongs to. A tap that doesn't match the current state (TTL expired, or a
+  // button from an older prompt) is ignored and the state left untouched.
+  if (type === 'button') {
+    const button = BUTTON_REPLIES[content];
+    if (!button || state?.lastAction !== button.state || !state.pendingExpense) {
+      return formatButtonExpired();
+    }
+    content = button.text;
+  }
 
   // 5. Handle awaiting_description — treat reply as category or description
   if (state?.lastAction === 'awaiting_description' && state.pendingExpense) {
@@ -1128,7 +1187,10 @@ async function handleMessageInner(
         categories.find((c) => c.slug === 'other') ??
         categories[0];
 
-      return buildConfirmationMessage(corrected, resolvedCategory);
+      return {
+        text: buildConfirmationMessage(corrected, resolvedCategory),
+        buttons: expenseConfirmButtons(),
+      };
     }
 
     // Non-correction intent — clear state, fall through with precomputed result

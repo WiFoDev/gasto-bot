@@ -46,7 +46,12 @@ vi.mock('../../src/db.js', () => ({
   deleteRule: vi.fn(),
 }));
 
-import { handleMessage } from '../../src/handler.js';
+import { handleMessage as handleMessageReply } from '../../src/handler.js';
+
+// Most tests only care about the reply text; button tests use handleMessageReply.
+const handleMessage = async (
+  ...args: Parameters<typeof handleMessageReply>
+): Promise<string> => (await handleMessageReply(...args)).text;
 import { parseMessage } from '../../src/parse.js';
 import { parseReceipt } from '../../src/parse-image.js';
 import { downloadImage, uploadImage } from '../../src/storage.js';
@@ -72,7 +77,7 @@ import {
   deleteRule,
 } from '../../src/db.js';
 import { getState, setState, clearState } from '../../src/state.js';
-import { formatHelp, formatError, formatUnknown, formatParseError, formatDatabaseError, formatNoExpenseToModify, formatReceiptUnclear, formatUnknownUser, formatExpenseCancelled, formatMerchantCorrection, formatCorrectionGeneric } from '../../src/formatter.js';
+import { formatHelp, formatError, formatUnknown, formatParseError, formatDatabaseError, formatNoExpenseToModify, formatReceiptUnclear, formatUnknownUser, formatExpenseCancelled, formatMerchantCorrection, formatCorrectionGeneric, formatButtonExpired, expenseConfirmButtons, newCategoryButtons, BUTTON_IDS } from '../../src/formatter.js';
 import type {
   User,
   Category,
@@ -3232,6 +3237,235 @@ describe('handleMessage', () => {
       expect(result).toContain('✅');
       expect(result).toContain('No comida fuera');
       expect(result).toContain('no permitido');
+    });
+  });
+});
+
+// ── Interactive confirm buttons (TASK-77) ───────────────────────────
+
+describe('interactive confirm buttons', () => {
+  const mascotasPending = makePendingExpense({
+    amount: 120,
+    category_slug: null,
+    suggested_category_name: 'Mascotas',
+    description: 'veterinario',
+  });
+
+  describe('prompts carry buttons', () => {
+    it('receipt confirmation has Guardar / Cancelar buttons', async () => {
+      const reply = await handleMessageReply(PHONE, 'image', 'https://media.kapso.ai/img.jpg');
+
+      expect(reply.text).toContain('¿Está bien?');
+      expect(reply.buttons).toEqual(expenseConfirmButtons());
+    });
+
+    it('mid-confidence text confirmation has Guardar / Cancelar buttons', async () => {
+      mockedParseMessage.mockResolvedValue(makeParseResult({ confidence: 0.7 }));
+
+      const reply = await handleMessageReply(PHONE, 'text', 'almuerzo 35 soles');
+
+      expect(reply.text).toContain('¿Lo registro?');
+      expect(reply.buttons).toEqual(expenseConfirmButtons());
+    });
+
+    it('confirmation re-shown after a correction keeps the buttons', async () => {
+      setState(PHONE, {
+        lastAction: 'awaiting_confirmation',
+        pendingExpense: makePendingExpense(),
+        lastExpenseId: null,
+        updatedAt: Date.now(),
+      });
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({ intent: 'correct_expense', correction_field: 'category', category_slug: 'transport' }),
+      );
+
+      const reply = await handleMessageReply(PHONE, 'text', 'era transporte');
+
+      expect(reply.text).toContain('Transport');
+      expect(reply.buttons).toEqual(expenseConfirmButtons());
+    });
+
+    it('new category confirmation has Crear / Usar Otros buttons', async () => {
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          confidence: 0.95,
+          amount: 120,
+          category_slug: null,
+          suggested_category_name: 'Mascotas',
+          description: 'veterinario',
+        }),
+      );
+
+      const reply = await handleMessageReply(PHONE, 'text', 'veterinario 120');
+
+      expect(reply.text).toContain('Mascotas');
+      expect(reply.buttons).toEqual(newCategoryButtons());
+    });
+
+    it('new category suggested during a correction has Crear / Usar Otros buttons', async () => {
+      setState(PHONE, {
+        lastAction: 'expense_logged',
+        pendingExpense: null,
+        lastExpenseId: 'exp-1',
+        updatedAt: Date.now(),
+      });
+      mockedGetExpenseById.mockResolvedValue(makeExpense({ id: 'exp-1', category_id: 'cat-food' }));
+      mockedParseMessage.mockResolvedValue(
+        makeParseResult({
+          intent: 'correct_expense',
+          correction_field: 'category',
+          category_slug: null,
+          suggested_category_name: 'Familia',
+        }),
+      );
+
+      const reply = await handleMessageReply(PHONE, 'text', 'eso fue familia');
+
+      expect(reply.buttons).toEqual(newCategoryButtons());
+    });
+
+    it('auto-logged expense has no buttons', async () => {
+      mockedParseMessage.mockResolvedValue(makeParseResult({ confidence: 0.95 }));
+
+      const reply = await handleMessageReply(PHONE, 'text', 'almuerzo 35 soles');
+
+      expect(reply.text).toContain('✅');
+      expect(reply.buttons).toBeUndefined();
+    });
+  });
+
+  describe('button taps', () => {
+    it('Guardar logs the pending expense without calling the parser', async () => {
+      setState(PHONE, {
+        lastAction: 'awaiting_confirmation',
+        pendingExpense: makePendingExpense(),
+        lastExpenseId: null,
+        updatedAt: Date.now(),
+      });
+
+      const reply = await handleMessageReply(PHONE, 'button', BUTTON_IDS.expenseConfirm);
+
+      expect(reply.text).toContain('✅');
+      expect(reply.text).toContain('S/35.00');
+      expect(mockedInsertExpense).toHaveBeenCalledOnce();
+      expect(mockedParseMessage).not.toHaveBeenCalled();
+      expect(getState(PHONE)!.lastAction).toBe('expense_logged');
+    });
+
+    it('Cancelar cancels the pending expense', async () => {
+      setState(PHONE, {
+        lastAction: 'awaiting_confirmation',
+        pendingExpense: makePendingExpense(),
+        lastExpenseId: null,
+        updatedAt: Date.now(),
+      });
+
+      const reply = await handleMessageReply(PHONE, 'button', BUTTON_IDS.expenseCancel);
+
+      expect(reply.text).toBe(formatExpenseCancelled());
+      expect(mockedInsertExpense).not.toHaveBeenCalled();
+      expect(getState(PHONE)).toBeNull();
+    });
+
+    it('Crear creates the suggested category and logs the expense', async () => {
+      setState(PHONE, {
+        lastAction: 'awaiting_category_confirmation',
+        pendingExpense: mascotasPending,
+        lastExpenseId: null,
+        updatedAt: Date.now(),
+      });
+      const newCategory: Category = {
+        id: 'cat-mascotas',
+        user_id: 'user-1',
+        name: 'Mascotas',
+        slug: 'mascotas',
+        icon: '📁',
+        is_default: false,
+        created_at: '2026-03-05T00:00:00Z',
+      };
+      mockedInsertCategory.mockResolvedValue(newCategory);
+      let calls = 0;
+      mockedGetCategoryBySlug.mockImplementation(async (_userId: string, slug: string) => {
+        if (slug === 'mascotas') return ++calls === 1 ? null : newCategory;
+        return mockCategories.find((c) => c.slug === slug) ?? null;
+      });
+
+      const reply = await handleMessageReply(PHONE, 'button', BUTTON_IDS.categoryCreate);
+
+      expect(mockedInsertCategory).toHaveBeenCalledWith('user-1', 'Mascotas', 'mascotas', '📁');
+      expect(reply.text).toContain('Categoría creada');
+      expect(reply.text).toContain('✅');
+      expect(mockedParseMessage).not.toHaveBeenCalled();
+    });
+
+    it('Usar Otros logs the expense under "other" without creating a category', async () => {
+      setState(PHONE, {
+        lastAction: 'awaiting_category_confirmation',
+        pendingExpense: mascotasPending,
+        lastExpenseId: null,
+        updatedAt: Date.now(),
+      });
+
+      const reply = await handleMessageReply(PHONE, 'button', BUTTON_IDS.categoryOther);
+
+      expect(mockedInsertCategory).not.toHaveBeenCalled();
+      expect(mockedInsertExpense).toHaveBeenCalledOnce();
+      expect(mockedInsertExpense.mock.calls[0][0].category_id).toBe('cat-other');
+      expect(reply.text).toContain('✅');
+      expect(mockedParseMessage).not.toHaveBeenCalled();
+    });
+
+    it('tap with no pending state (TTL expired) replies expired and does nothing', async () => {
+      const reply = await handleMessageReply(PHONE, 'button', BUTTON_IDS.expenseConfirm);
+
+      expect(reply.text).toBe(formatButtonExpired());
+      expect(reply.buttons).toBeUndefined();
+      expect(mockedInsertExpense).not.toHaveBeenCalled();
+      expect(mockedParseMessage).not.toHaveBeenCalled();
+    });
+
+    it('tap from an older prompt leaves the current pending state untouched', async () => {
+      setState(PHONE, {
+        lastAction: 'awaiting_category_confirmation',
+        pendingExpense: mascotasPending,
+        lastExpenseId: null,
+        updatedAt: Date.now(),
+      });
+
+      const reply = await handleMessageReply(PHONE, 'button', BUTTON_IDS.expenseConfirm);
+
+      expect(reply.text).toBe(formatButtonExpired());
+      expect(mockedInsertExpense).not.toHaveBeenCalled();
+      expect(getState(PHONE)!.lastAction).toBe('awaiting_category_confirmation');
+    });
+
+    it('unknown button id replies expired', async () => {
+      setState(PHONE, {
+        lastAction: 'awaiting_confirmation',
+        pendingExpense: makePendingExpense(),
+        lastExpenseId: null,
+        updatedAt: Date.now(),
+      });
+
+      const reply = await handleMessageReply(PHONE, 'button', 'something_else');
+
+      expect(reply.text).toBe(formatButtonExpired());
+      expect(mockedInsertExpense).not.toHaveBeenCalled();
+      expect(getState(PHONE)!.lastAction).toBe('awaiting_confirmation');
+    });
+
+    it('typed "sí" still confirms (buttons are optional)', async () => {
+      setState(PHONE, {
+        lastAction: 'awaiting_confirmation',
+        pendingExpense: makePendingExpense(),
+        lastExpenseId: null,
+        updatedAt: Date.now(),
+      });
+
+      const reply = await handleMessageReply(PHONE, 'text', 'sí');
+
+      expect(reply.text).toContain('✅');
+      expect(mockedInsertExpense).toHaveBeenCalledOnce();
     });
   });
 });

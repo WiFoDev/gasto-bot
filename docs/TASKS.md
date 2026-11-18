@@ -234,6 +234,26 @@
   - Manual step: set `CRON_SECRET` on Railway and add `CRON_SECRET` +
     `KEEP_ALIVE_URL` repo secrets
 
+- [x] TASK-77: Interactive confirm buttons (WhatsApp reply buttons)
+  - Confirmation prompts ship with tappable reply buttons; typed replies
+    ("sí", "no", corrections) keep working exactly as before
+  - `src/types.ts`: `ReplyButton`, `BotReply { text, buttons? }`;
+    `MessageHandler` returns `BotReply` and accepts `type: 'button'` (content =
+    button id); webhook payload gains `interactive.button_reply`
+  - `src/formatter.ts`: `BUTTON_IDS`, `expenseConfirmButtons()`
+    (✅ Guardar / ❌ Cancelar), `newCategoryButtons()` (✅ Crear / 📁 Usar Otros),
+    `formatButtonExpired()`
+  - `src/handler.ts`: receipt confirmation, mid-confidence text confirmation
+    (incl. re-shown after a correction) and new-category confirmation return
+    buttons. A button tap maps onto the existing confirm/deny branch for the
+    matching state — no new state, no extra LLM call. A tap with no matching
+    state (TTL expired / older prompt) → `formatButtonExpired()`, state untouched
+  - `src/webhook.ts`: accept `interactive` + `button_reply`; send via
+    `sendInteractiveButtons` when the reply has buttons, falling back to
+    `sendText` if that call fails
+  - Unit tests: button cases in `handler.test.ts`, `webhook.test.ts`,
+    `formatter.test.ts`
+
 ---
 
 ### Future Ideas (Not Scoped)

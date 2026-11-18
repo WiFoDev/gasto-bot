@@ -1,4 +1,4 @@
-import type { Expense, Category, PendingExpense, Budget, SummaryResult, MonthlyClosingData, PaymentType, FinancialRule } from './types.js';
+import type { Expense, Category, PendingExpense, Budget, SummaryResult, MonthlyClosingData, PaymentType, FinancialRule, ReplyButton } from './types.js';
 import type { RuleViolation } from './rules.js';
 
 const MAX_DESCRIPTION_LENGTH = 50;
@@ -286,6 +286,33 @@ export function formatReceiptUnclear(): string {
 export function formatNoBudget(category: Category | null): string {
   const label = category ? `${category.icon} ${category.name}` : 'general';
   return `No hay presupuesto para ${label}. Prueba "presupuesto ${category?.slug ?? ''} 500 mensual"`;
+}
+
+// ── Confirmation buttons ────────────────────────────────────────
+
+export const BUTTON_IDS = {
+  expenseConfirm: 'expense_confirm',
+  expenseCancel: 'expense_cancel',
+  categoryCreate: 'category_create',
+  categoryOther: 'category_other',
+} as const;
+
+export function expenseConfirmButtons(): ReplyButton[] {
+  return [
+    { id: BUTTON_IDS.expenseConfirm, title: '✅ Guardar' },
+    { id: BUTTON_IDS.expenseCancel, title: '❌ Cancelar' },
+  ];
+}
+
+export function newCategoryButtons(): ReplyButton[] {
+  return [
+    { id: BUTTON_IDS.categoryCreate, title: '✅ Crear' },
+    { id: BUTTON_IDS.categoryOther, title: '📁 Usar Otros' },
+  ];
+}
+
+export function formatButtonExpired(): string {
+  return 'Ese botón ya no está activo. Si querías registrar un gasto, envíamelo de nuevo.';
 }
 
 export function formatExpenseCancelled(): string {

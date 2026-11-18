@@ -186,11 +186,26 @@ export interface ConversationState {
 
 // ── Handler ──────────────────────────────────────────────────────
 
+/** Quick-reply button (WhatsApp: max 3 per message, title ≤ 20 chars). */
+export interface ReplyButton {
+  id: string;
+  title: string;
+}
+
+/** What the handler sends back. With `buttons`, it goes out as an interactive message. */
+export interface BotReply {
+  text: string;
+  buttons?: ReplyButton[];
+}
+
+/** 'button' = a tapped reply button; content is the button id. */
+export type InboundMessageType = 'text' | 'image' | 'button';
+
 export type MessageHandler = (
   phone: string,
-  type: 'text' | 'image',
+  type: InboundMessageType,
   content: string,
-) => Promise<string>;
+) => Promise<BotReply>;
 
 // ── Webhook ──────────────────────────────────────────────────────
 
@@ -202,6 +217,10 @@ export interface KapsoWebhookPayload {
     from?: string;
     text?: { body?: string };
     image?: { id?: string; link?: string; caption?: string };
+    interactive?: {
+      type?: string;
+      button_reply?: { id?: string; title?: string };
+    };
     kapso?: {
       direction?: string;
       hasMedia?: boolean;
