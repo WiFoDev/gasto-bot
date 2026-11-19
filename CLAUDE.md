@@ -41,6 +41,7 @@
 - `src/parse-image.ts` — Claude Vision call for receipts
 - `src/db.ts` — Supabase client + 18 query functions (incl. `pingDatabase()` health probe)
 - `src/keep-alive.ts` — free-tier keep-alive probe + constant-time cron bearer auth
+- `src/whatsapp.ts` — outbound Kapso sends (`sendWhatsAppText`, `sendBotReply`)
 - `src/storage.ts` — download from Kapso → upload to Supabase Storage
 - `src/state.ts` — conversation state Map keyed by phone number
 - `src/formatter.ts` — WhatsApp-optimized response strings

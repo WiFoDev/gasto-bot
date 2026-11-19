@@ -398,7 +398,7 @@
     a Mercado Libre printer). Labels by the user 2026-11-19; unknowable
     merchants (store codes, LIMABLUE podologist) excluded from fixtures
 
-- [ ] TASK-70: Outbound WhatsApp module
+- [x] TASK-70: Outbound WhatsApp module
   - Depends on: TASK-66
   - `src/whatsapp.ts`: `sendWhatsAppText(to, body)` built on the existing
     `WhatsAppClient`, using `KAPSO_PHONE_NUMBER_ID` from config (the inbound

@@ -1,10 +1,10 @@
 import crypto from 'node:crypto';
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
-import { WhatsAppClient } from '@kapso/whatsapp-cloud-api';
-import { CRON_SECRET, KAPSO_API_KEY, KAPSO_WEBHOOK_SECRET } from './config.js';
+import { CRON_SECRET, KAPSO_WEBHOOK_SECRET } from './config.js';
 import { pingDatabase } from './db.js';
 import { formatError, formatUnsupportedMedia } from './formatter.js';
 import { isCronAuthorized, runKeepAlive } from './keep-alive.js';
+import { sendBotReply, sendWhatsAppText } from './whatsapp.js';
 import type {
   BotReply,
   InboundMessageType,
@@ -44,11 +44,6 @@ const webhookPlugin: FastifyPluginAsync<WebhookPluginOptions> = async (
   opts: WebhookPluginOptions,
 ) => {
   const { handleMessage } = opts;
-
-  const kapsoClient = new WhatsAppClient({
-    baseUrl: 'https://api.kapso.ai/meta/whatsapp',
-    kapsoApiKey: KAPSO_API_KEY,
-  });
 
   // ── Health check ─────────────────────────────────────────────
 
@@ -209,11 +204,7 @@ const webhookPlugin: FastifyPluginAsync<WebhookPluginOptions> = async (
         }),
       );
       try {
-        await kapsoClient.messages.sendText({
-          phoneNumberId: phone_number_id,
-          to: phone,
-          body: formatUnsupportedMedia(),
-        });
+        await sendWhatsAppText(phone, formatUnsupportedMedia(), phone_number_id);
       } catch {
         // Best-effort reply
       }
@@ -249,38 +240,9 @@ const webhookPlugin: FastifyPluginAsync<WebhookPluginOptions> = async (
       botReply = { text: formatError() };
     }
 
-    // Send reply via Kapso — as reply buttons when present, plain text otherwise.
-    // A failed button send falls back to text so the prompt is never lost
-    // (typed "sí"/"no" still works).
+    // Send reply via Kapso (buttons with text fallback live in whatsapp.ts)
     try {
-      let sent = false;
-      if (botReply.buttons?.length) {
-        try {
-          await kapsoClient.messages.sendInteractiveButtons({
-            phoneNumberId: phone_number_id,
-            to: phone,
-            bodyText: botReply.text,
-            buttons: botReply.buttons,
-          });
-          sent = true;
-        } catch (err) {
-          console.log(
-            JSON.stringify({
-              event: 'kapso_buttons_error',
-              error: err instanceof Error ? err.message : String(err),
-              phone,
-              timestamp: new Date().toISOString(),
-            }),
-          );
-        }
-      }
-      if (!sent) {
-        await kapsoClient.messages.sendText({
-          phoneNumberId: phone_number_id,
-          to: phone,
-          body: botReply.text,
-        });
-      }
+      await sendBotReply(phone, botReply, phone_number_id);
     } catch (err) {
       console.log(
         JSON.stringify({
