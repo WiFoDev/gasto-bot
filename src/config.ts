@@ -22,6 +22,20 @@ export const PORT = parseInt(process.env.PORT || '3000', 10);
 // boots without it — the endpoint rejects every request while it is unset.
 export const CRON_SECRET = process.env.CRON_SECRET;
 
+// ── Bank-email ingestion (Phase 6) ────────────────────────────────
+// All optional: the server boots without them and POST /inbound/bank-email
+// rejects every request while INBOUND_EMAIL_SECRET is unset. Empty = unset.
+
+function optionalEnv(name: string): string | undefined {
+  return process.env[name] || undefined;
+}
+
+export const INBOUND_EMAIL_SECRET = optionalEnv('INBOUND_EMAIL_SECRET');
+// Kapso phone number that sends bot-initiated messages (no inbound to reply to).
+export const KAPSO_PHONE_NUMBER_ID = optionalEnv('KAPSO_PHONE_NUMBER_ID');
+// Phone (E.164) of the user who receives auto-logged bank expenses.
+export const BANK_EMAIL_USER_PHONE = optionalEnv('BANK_EMAIL_USER_PHONE');
+
 // ── Constants ─────────────────────────────────────────────────────
 
 export const CONFIDENCE_AUTO_LOG = 0.85;

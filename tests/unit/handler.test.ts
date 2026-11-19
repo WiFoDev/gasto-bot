@@ -186,6 +186,7 @@ function makeExpense(overrides: Partial<Expense> = {}): Expense {
     payment_method_name: null,
     deleted_at: null,
     created_at: '2026-02-27T12:00:00Z',
+    bank_reference: null,
     ...overrides,
   };
 }

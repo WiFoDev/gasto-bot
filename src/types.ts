@@ -19,6 +19,8 @@ export interface Category {
   created_at: string;
 }
 
+export type ExpenseSource = 'text' | 'image' | 'email';
+
 export interface Expense {
   id: string;
   user_id: string;
@@ -28,12 +30,13 @@ export interface Expense {
   description: string | null;
   merchant: string | null;
   date: string;
-  source: 'text' | 'image';
+  source: ExpenseSource;
   raw_input: string;
   image_url: string | null;
   ai_confidence: number;
   payment_type: PaymentType | null;
   payment_method_name: string | null;
+  bank_reference: string | null;
   deleted_at: string | null;
   created_at: string;
 }
@@ -169,7 +172,7 @@ export interface PendingExpense {
   description: string | null;
   merchant: string | null;
   date: string;
-  source: 'text' | 'image';
+  source: ExpenseSource;
   raw_input: string;
   image_url: string | null;
   ai_confidence: number;
@@ -276,4 +279,32 @@ export interface KeepAliveResult {
   database: ProbeStatus;
   timestamp: string;
   ok: boolean;
+}
+
+// ── Bank-email ingestion ─────────────────────────────────────────
+
+/** A card purchase extracted from a bank notification email. */
+export interface BankTransaction {
+  bank: 'bcp';
+  amount: number;
+  currency: string;
+  merchant: string;
+  /** YYYY-MM-DD, Lima local. */
+  date: string;
+  /** HH:mm (24h), Lima local. */
+  time: string;
+  card_last4: string;
+  /** Bank operation number — idempotency key (`expenses.bank_reference`). */
+  operation_number: string;
+  raw_text: string;
+}
+
+/** Email as POSTed by the Cloudflare Email Worker. */
+export interface InboundEmail {
+  from: string;
+  to: string;
+  subject: string;
+  text: string;
+  /** ISO 8601 timestamp. */
+  receivedAt: string;
 }

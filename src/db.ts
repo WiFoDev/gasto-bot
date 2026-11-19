@@ -108,6 +108,21 @@ export async function getExpenseById(id: string): Promise<Expense | null> {
   return data;
 }
 
+export async function getExpenseByBankReference(
+  userId: string,
+  bankReference: string,
+): Promise<Expense | null> {
+  const { data, error } = await supabase
+    .from('expenses')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('bank_reference', bankReference)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
 export async function getLastExpense(userId: string): Promise<Expense | null> {
   const { data, error } = await supabase
     .from('expenses')

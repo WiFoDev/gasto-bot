@@ -172,6 +172,7 @@ async function resolveAndInsertExpense(
     ai_confidence: pending.ai_confidence,
     payment_type: pending.payment_type,
     payment_method_name: pending.payment_method_name,
+    bank_reference: null,
   });
 
   if (pending.items.length > 0) {

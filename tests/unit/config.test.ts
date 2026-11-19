@@ -16,6 +16,12 @@ const VALID_ENV = {
   KAPSO_WEBHOOK_SECRET: 'webhook-secret',
 };
 
+const BANK_EMAIL_VARS = [
+  'INBOUND_EMAIL_SECRET',
+  'KAPSO_PHONE_NUMBER_ID',
+  'BANK_EMAIL_USER_PHONE',
+];
+
 function loadConfig() {
   // Reset module cache so config.ts re-evaluates on each import
   vi.resetModules();
@@ -25,7 +31,7 @@ function loadConfig() {
 describe('config', () => {
   beforeEach(() => {
     // Clear all env vars before each test
-    for (const key of [...REQUIRED_VARS, 'PORT']) {
+    for (const key of [...REQUIRED_VARS, 'PORT', ...BANK_EMAIL_VARS]) {
       delete process.env[key];
     }
   });
@@ -77,6 +83,39 @@ describe('config', () => {
       const config = await loadConfig();
       expect(config.PORT).toBe(8080);
     });
+  });
+
+  describe('bank-email env vars (optional)', () => {
+    for (const varName of BANK_EMAIL_VARS) {
+      it(`boots and leaves ${varName} undefined when unset`, async () => {
+        for (const key of REQUIRED_VARS) {
+          process.env[key] = VALID_ENV[key as keyof typeof VALID_ENV];
+        }
+
+        const config = await loadConfig();
+        expect(config[varName as keyof typeof config]).toBeUndefined();
+      });
+
+      it(`treats an empty ${varName} as unset`, async () => {
+        for (const key of REQUIRED_VARS) {
+          process.env[key] = VALID_ENV[key as keyof typeof VALID_ENV];
+        }
+        process.env[varName] = '';
+
+        const config = await loadConfig();
+        expect(config[varName as keyof typeof config]).toBeUndefined();
+      });
+
+      it(`reads ${varName} from env when set`, async () => {
+        for (const key of REQUIRED_VARS) {
+          process.env[key] = VALID_ENV[key as keyof typeof VALID_ENV];
+        }
+        process.env[varName] = 'some-value';
+
+        const config = await loadConfig();
+        expect(config[varName as keyof typeof config]).toBe('some-value');
+      });
+    }
   });
 
   describe('constants', () => {

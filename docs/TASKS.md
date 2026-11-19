@@ -320,7 +320,7 @@
     blocked; Phase 6 is not a scheduler
   - No code. Commit: `docs(TASK-65): carve out bank-email exception`
 
-- [ ] TASK-66: Migration + types for email-sourced expenses
+- [x] TASK-66: Migration + types for email-sourced expenses
   - Depends on: TASK-65
   - `migrations/006_bank_email.sql`: relax `expenses.source` CHECK to
     `('text','image','email')`; add `bank_reference TEXT` + partial unique
