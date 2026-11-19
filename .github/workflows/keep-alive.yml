@@ -10,19 +10,32 @@ name: keep-alive
 #   KEEP_ALIVE_URL — deployment base URL, e.g. https://gasto-bot.up.railway.app
 #   CRON_SECRET    — same value as the CRON_SECRET env var on Railway
 #
-# NOTE: GitHub disables scheduled workflows in repos with no commits for 60
-# days. If that happens, re-enable it from the Actions tab.
+# GitHub disables scheduled workflows in public repos after 60 days without a
+# commit ("disabled_inactivity") — this happened on 2026-09-25 and Supabase
+# paused a week later. The weekly `reset-inactivity` job disables and
+# immediately re-enables this workflow through the API, which resets that
+# 60-day timer without dummy commits.
 
 on:
   schedule:
     # Hourly at :27. Off-the-hour on purpose: GitHub's scheduler is heavily
     # contended at :00 and delays those runs by up to an hour.
     - cron: '27 * * * *'
+    # Weekly (Mon 09:43 UTC): reset the 60-day inactivity timer.
+    - cron: '43 9 * * 1'
   workflow_dispatch:
+    inputs:
+      reset_inactivity:
+        description: 'Also run the inactivity-timer reset'
+        type: boolean
+        default: false
 
 concurrency:
   group: keep-alive
   cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
   ping:
@@ -70,3 +83,33 @@ jobs:
 
           echo "::error::keep-alive failed after 3 attempts — last response: HTTP ${status:-none} ${body:-<empty>}"
           exit 1
+
+  reset-inactivity:
+    name: Reset GitHub's 60-day inactivity timer
+    if: github.event.schedule == '43 9 * * 1' || inputs.reset_inactivity
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Disable + re-enable this workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          workflow="keep-alive.yml"
+
+          # Whatever happens below, never leave the workflow disabled.
+          trap 'gh workflow enable "${workflow}" --repo "${REPO}" || true' EXIT
+
+          gh workflow disable "${workflow}" --repo "${REPO}"
+          gh workflow enable "${workflow}" --repo "${REPO}"
+
+          state=$(gh api "repos/${REPO}/actions/workflows/${workflow}" --jq .state)
+          echo "workflow state: ${state}"
+          if [ "${state}" != "active" ]; then
+            echo "::error::keep-alive workflow is '${state}' after reset"
+            exit 1
+          fi
+          echo "::notice::Inactivity timer reset"
