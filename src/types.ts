@@ -304,7 +304,10 @@ export interface InboundEmail {
   from: string;
   to: string;
   subject: string;
+  /** text/plain part ('' when absent — BCP sends HTML only). */
   text: string;
+  /** text/html part, or null when absent. */
+  html: string | null;
   /** ISO 8601 timestamp. */
   receivedAt: string;
 }

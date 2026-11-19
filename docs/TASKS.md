@@ -339,7 +339,7 @@
   - Unit tests: `config.test.ts` for the new env handling
   - Manual step: run migration on Supabase; set env vars on Railway
 
-- [ ] TASK-67: BCP email parser (pure, no LLM) 🚧 GATE #4
+- [x] TASK-67: BCP email parser (pure, no LLM) 🚧 GATE #4
   - Depends on: TASK-66
   - `src/parse-bank-email.ts`: `parseBcpEmail(email: InboundEmail): BankTransaction | null`
     - Returns `null` unless subject matches the "Realizaste un consumo"
@@ -356,6 +356,12 @@
   - `tests/unit/parse-bank-email.test.ts`
   - **GATE #4: 100% field accuracy on fixtures** (deterministic parser — no
     tolerance). Gate blocks TASK-71
+  - **Result**: GATE #4 PASSED — 15/15 fixtures (10 parsed, 5 ignored).
+    Findings from real emails: BCP sends HTML only (no text/plain part) so
+    the parser strips HTML itself (`InboundEmail.html` added); debit-card
+    operation numbers are 6 digits; amounts can carry thousands commas.
+    Scope decision: credit card only — debit-card "consumo" and credit-card
+    "operación" emails return null
 
 - [ ] TASK-68: Merchant memory (skip Claude for known merchants)
   - Depends on: TASK-66
