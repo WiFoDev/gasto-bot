@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { runKeepAlive, isCronAuthorized } from '../../src/keep-alive.js';
+import { runKeepAlive, isBearerAuthorized } from '../../src/keep-alive.js';
 
 // ── runKeepAlive ─────────────────────────────────────────────────
 
@@ -56,33 +56,33 @@ describe('runKeepAlive', () => {
   });
 });
 
-// ── isCronAuthorized ─────────────────────────────────────────────
+// ── isBearerAuthorized ─────────────────────────────────────────────
 
-describe('isCronAuthorized', () => {
+describe('isBearerAuthorized', () => {
   it('accepts a matching bearer token', () => {
-    expect(isCronAuthorized('Bearer s3cret', 's3cret')).toBe(true);
+    expect(isBearerAuthorized('Bearer s3cret', 's3cret')).toBe(true);
   });
 
   it('rejects a wrong token of the same length', () => {
-    expect(isCronAuthorized('Bearer s3cres', 's3cret')).toBe(false);
+    expect(isBearerAuthorized('Bearer s3cres', 's3cret')).toBe(false);
   });
 
   it('rejects a wrong token of a different length', () => {
-    expect(isCronAuthorized('Bearer nope', 's3cret')).toBe(false);
+    expect(isBearerAuthorized('Bearer nope', 's3cret')).toBe(false);
   });
 
   it('rejects a missing header', () => {
-    expect(isCronAuthorized(undefined, 's3cret')).toBe(false);
-    expect(isCronAuthorized(null, 's3cret')).toBe(false);
+    expect(isBearerAuthorized(undefined, 's3cret')).toBe(false);
+    expect(isBearerAuthorized(null, 's3cret')).toBe(false);
   });
 
   it('rejects a header without the Bearer prefix', () => {
-    expect(isCronAuthorized('s3cret', 's3cret')).toBe(false);
-    expect(isCronAuthorized('Basic s3cret', 's3cret')).toBe(false);
+    expect(isBearerAuthorized('s3cret', 's3cret')).toBe(false);
+    expect(isBearerAuthorized('Basic s3cret', 's3cret')).toBe(false);
   });
 
   it('rejects everything when no secret is configured', () => {
-    expect(isCronAuthorized('Bearer anything', undefined)).toBe(false);
-    expect(isCronAuthorized('Bearer ', '')).toBe(false);
+    expect(isBearerAuthorized('Bearer anything', undefined)).toBe(false);
+    expect(isBearerAuthorized('Bearer ', '')).toBe(false);
   });
 });

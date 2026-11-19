@@ -432,7 +432,7 @@
     low confidence → other, USD, alerts appended, state set) +
     `formatter.test.ts` inline snapshots
 
-- [ ] TASK-72: `POST /inbound/bank-email` route ⚡ CRITICAL PATH
+- [x] TASK-72: `POST /inbound/bank-email` route ⚡ CRITICAL PATH
   - Depends on: TASK-71
   - `webhook.ts` (HTTP only): accepts raw MIME (`message/rfc822` or
     `text/plain`); bearer check with the constant-time compare from

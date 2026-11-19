@@ -359,3 +359,25 @@ const IGNORED: BcpEmailFixture[] = [
 ];
 
 export const BCP_EMAIL_FIXTURES: BcpEmailFixture[] = [...PARSED, ...IGNORED];
+
+// ── Raw MIME (what the Cloudflare Email Worker POSTs) ────────────────
+
+export const BCP_SENDER = 'notificaciones@notificacionesbcp.com.pe';
+
+/** RFC 822 message for an InboundEmail; non-ASCII subject is RFC 2047 encoded. */
+export function toMime(email: InboundEmail, from = `"Servicio de Notificaciones BCP" <${BCP_SENDER}>`): string {
+  const subject = `=?UTF-8?B?${Buffer.from(email.subject, 'utf8').toString('base64')}?=`;
+  const headers = [
+    `From: ${from}`,
+    `To: ${email.to}`,
+    `Subject: ${subject}`,
+    'Date: Wed, 18 Nov 2026 17:15:23 -0500',
+    'MIME-Version: 1.0',
+  ];
+  if (email.html !== null) {
+    headers.push('Content-Type: text/html; charset=utf-8', 'Content-Transfer-Encoding: 8bit');
+    return `${headers.join('\r\n')}\r\n\r\n${email.html}`;
+  }
+  headers.push('Content-Type: text/plain; charset=utf-8', 'Content-Transfer-Encoding: 8bit');
+  return `${headers.join('\r\n')}\r\n\r\n${email.text}`;
+}

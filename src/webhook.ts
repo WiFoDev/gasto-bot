@@ -1,11 +1,18 @@
 import crypto from 'node:crypto';
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
-import { CRON_SECRET, KAPSO_WEBHOOK_SECRET } from './config.js';
+import {
+  BANK_EMAIL_USER_PHONE,
+  CRON_SECRET,
+  INBOUND_EMAIL_SECRET,
+  KAPSO_WEBHOOK_SECRET,
+} from './config.js';
 import { pingDatabase } from './db.js';
 import { formatError, formatUnsupportedMedia } from './formatter.js';
-import { isCronAuthorized, runKeepAlive } from './keep-alive.js';
+import { isBearerAuthorized, runKeepAlive } from './keep-alive.js';
+import { BCP_SENDER, mimeToInboundEmail, parseBcpEmail } from './parse-bank-email.js';
 import { sendBotReply, sendWhatsAppText } from './whatsapp.js';
 import type {
+  BankEmailHandler,
   BotReply,
   InboundMessageType,
   KapsoWebhookPayload,
@@ -35,7 +42,11 @@ export { recentMessageIds };
 
 export interface WebhookPluginOptions {
   handleMessage: MessageHandler;
+  handleBankEmail: BankEmailHandler;
 }
+
+/** Bank emails are small; this bounds a forwarded message with inline images. */
+const BANK_EMAIL_BODY_LIMIT = 5 * 1024 * 1024;
 
 // ── Plugin ───────────────────────────────────────────────────────
 
@@ -43,7 +54,15 @@ const webhookPlugin: FastifyPluginAsync<WebhookPluginOptions> = async (
   fastify: FastifyInstance,
   opts: WebhookPluginOptions,
 ) => {
-  const { handleMessage } = opts;
+  const { handleMessage, handleBankEmail } = opts;
+
+  // Raw MIME from the Cloudflare Email Worker. text/plain is parsed as a
+  // string by Fastify already; message/rfc822 needs its own parser.
+  fastify.addContentTypeParser(
+    'message/rfc822',
+    { parseAs: 'buffer', bodyLimit: BANK_EMAIL_BODY_LIMIT },
+    (_request, body, done) => done(null, body),
+  );
 
   // ── Health check ─────────────────────────────────────────────
 
@@ -61,7 +80,7 @@ const webhookPlugin: FastifyPluginAsync<WebhookPluginOptions> = async (
     method: ['GET', 'POST'],
     url: '/cron/keep-alive',
     handler: async (request, reply) => {
-      if (!isCronAuthorized(request.headers.authorization, CRON_SECRET)) {
+      if (!isBearerAuthorized(request.headers.authorization, CRON_SECRET)) {
         console.log(
           JSON.stringify({
             event: 'keep_alive_rejected',
@@ -79,6 +98,95 @@ const webhookPlugin: FastifyPluginAsync<WebhookPluginOptions> = async (
       return reply.status(200).send(result);
     },
   });
+
+  // ── Bank email (Phase 6) ─────────────────────────────────────
+  // A forwarded BCP card-purchase email → one expense + one WhatsApp message.
+  // Always 200 after auth so the forwarder never retry-storms; the outcome is
+  // in the body and the logs. Logs never carry the email body.
+
+  fastify.post(
+    '/inbound/bank-email',
+    { bodyLimit: BANK_EMAIL_BODY_LIMIT },
+    async (request, reply) => {
+      const log = (event: string, extra: Record<string, unknown> = {}) =>
+        console.log(JSON.stringify({ event, ...extra, timestamp: new Date().toISOString() }));
+
+      if (!isBearerAuthorized(request.headers.authorization, INBOUND_EMAIL_SECRET)) {
+        log('bank_email_unauthorized', {
+          reason: INBOUND_EMAIL_SECRET ? 'invalid_token' : 'secret_not_configured',
+        });
+        return reply.status(401).send({ error: 'Unauthorized' });
+      }
+
+      const raw = request.body;
+      if (!(typeof raw === 'string' || Buffer.isBuffer(raw)) || raw.length === 0) {
+        log('bank_email_rejected', { reason: 'empty_body' });
+        return reply.status(200).send({ status: 'rejected' });
+      }
+
+      let email;
+      try {
+        email = await mimeToInboundEmail(raw);
+      } catch (err) {
+        log('bank_email_rejected', {
+          reason: 'invalid_mime',
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return reply.status(200).send({ status: 'rejected' });
+      }
+
+      if (email.from !== BCP_SENDER) {
+        log('bank_email_rejected', {
+          reason: 'wrong_sender',
+          senderDomain: email.from.split('@')[1] ?? null,
+        });
+        return reply.status(200).send({ status: 'rejected' });
+      }
+
+      const tx = parseBcpEmail(email);
+      if (!tx) {
+        log('bank_email_skipped', { subject: email.subject.slice(0, 120) });
+        return reply.status(200).send({ status: 'skipped' });
+      }
+
+      const txLog = {
+        amount: tx.amount,
+        currency: tx.currency,
+        merchant: tx.merchant,
+        operation_number: tx.operation_number,
+      };
+
+      let text: string | null;
+      try {
+        text = await handleBankEmail(tx);
+      } catch (err) {
+        log('bank_email_error', {
+          ...txLog,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return reply.status(200).send({ status: 'error' });
+      }
+
+      if (text === null) {
+        // Duplicate or no configured user; handleBankEmail logged why.
+        return reply.status(200).send({ status: 'ignored' });
+      }
+
+      log('bank_email_processed', txLog);
+
+      // Best-effort: the expense is registered even if WhatsApp fails.
+      try {
+        await sendWhatsAppText(BANK_EMAIL_USER_PHONE!, text);
+      } catch (err) {
+        log('bank_notify_error', {
+          ...txLog,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+
+      return reply.status(200).send({ status: 'processed' });
+    },
+  );
 
   // ── Webhook ──────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { parseBcpEmail, bankReference } from '../../src/parse-bank-email.js';
-import { BCP_EMAIL_FIXTURES } from '../fixtures/bcp-emails.js';
+import { parseBcpEmail, bankReference, mimeToInboundEmail } from '../../src/parse-bank-email.js';
+import { BCP_EMAIL_FIXTURES, BCP_SENDER, toMime } from '../fixtures/bcp-emails.js';
 import type { InboundEmail } from '../../src/types.js';
 
 const SUBJECT =
@@ -151,5 +151,48 @@ describe('bankReference', () => {
   it('namespaces the operation number by bank', () => {
     const tx = parseBcpEmail(BCP_EMAIL_FIXTURES[0].email)!;
     expect(bankReference(tx)).toBe('bcp:0000812345');
+  });
+});
+
+describe('mimeToInboundEmail', () => {
+  const fixture = BCP_EMAIL_FIXTURES[0];
+
+  it('decodes sender, subject and HTML from raw MIME', async () => {
+    const email = await mimeToInboundEmail(toMime(fixture.email));
+    expect(email.from).toBe(BCP_SENDER);
+    expect(email.subject).toBe(fixture.email.subject);
+    // postal-mime normalizes CRLF to LF
+    expect(email.html).toBe(fixture.email.html!.replace(/\r\n/g, '\n'));
+    expect(email.text).toBe('');
+    expect(email.receivedAt).toBe('2026-11-18T22:15:23.000Z');
+  });
+
+  it('accepts a Buffer', async () => {
+    const email = await mimeToInboundEmail(Buffer.from(toMime(fixture.email), 'utf8'));
+    expect(email.subject).toBe(fixture.email.subject);
+  });
+
+  it('lowercases the sender address and drops the display name', async () => {
+    const email = await mimeToInboundEmail(toMime(fixture.email, 'BCP <Notificaciones@NotificacionesBCP.com.pe>'));
+    expect(email.from).toBe(BCP_SENDER);
+  });
+
+  it('round-trips into parseBcpEmail', async () => {
+    const tx = parseBcpEmail(await mimeToInboundEmail(toMime(fixture.email)));
+    const { raw_text: _ignored, ...fields } = tx!;
+    expect(fields).toEqual(fixture.expected);
+  });
+
+  it('a plain-text email has html null', async () => {
+    const email = await mimeToInboundEmail(toMime({ ...fixture.email, html: null, text: 'hola' }));
+    expect(email.html).toBeNull();
+    expect(email.text.trim()).toBe('hola');
+  });
+
+  it('missing headers become empty strings', async () => {
+    const email = await mimeToInboundEmail('\r\n\r\nbody only');
+    expect(email.from).toBe('');
+    expect(email.subject).toBe('');
+    expect(email.to).toBe('');
   });
 });

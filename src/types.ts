@@ -211,6 +211,9 @@ export type MessageHandler = (
   content: string,
 ) => Promise<BotReply>;
 
+/** Registers a parsed bank email; returns the WhatsApp text, or null to stay silent. */
+export type BankEmailHandler = (tx: BankTransaction) => Promise<string | null>;
+
 // ── Webhook ──────────────────────────────────────────────────────
 
 export interface KapsoWebhookPayload {

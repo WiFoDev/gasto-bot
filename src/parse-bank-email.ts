@@ -1,3 +1,4 @@
+import PostalMime from 'postal-mime';
 import type { BankTransaction, InboundEmail } from './types.js';
 
 /**
@@ -6,6 +7,9 @@ import type { BankTransaction, InboundEmail } from './types.js';
  * match exactly returns null (debit cards, "operación" charges, Yapeo,
  * statements, truncated bodies).
  */
+
+/** The only sender whose emails are registered (exact match, lowercased). */
+export const BCP_SENDER = 'notificaciones@notificacionesbcp.com.pe';
 
 const SUBJECT_RE = /Realizaste un consumo con tu Tarjeta de Cr[ée]dito BCP/i;
 const OPERATION_TYPE = 'Consumo Tarjeta de Crédito';
@@ -66,6 +70,26 @@ export function parseBcpEmail(email: InboundEmail): BankTransaction | null {
 /** Idempotency key stored in `expenses.bank_reference`. */
 export function bankReference(tx: BankTransaction): string {
   return `${tx.bank}:${tx.operation_number}`;
+}
+
+/**
+ * Decodes the raw RFC 822 message the Email Worker forwards. The sender is
+ * reduced to its lowercased address so callers can compare it exactly.
+ */
+export async function mimeToInboundEmail(raw: string | Buffer): Promise<InboundEmail> {
+  const email = await PostalMime.parse(raw);
+  const from = email.from && 'address' in email.from ? email.from.address ?? '' : '';
+  const to = email.to?.[0] && 'address' in email.to[0] ? email.to[0].address ?? '' : '';
+  const date = email.date ? new Date(email.date) : null;
+
+  return {
+    from: from.toLowerCase(),
+    to: to.toLowerCase(),
+    subject: email.subject ?? '',
+    text: email.text ?? '',
+    html: email.html ?? null,
+    receivedAt: date && !Number.isNaN(date.getTime()) ? date.toISOString() : new Date().toISOString(),
+  };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────

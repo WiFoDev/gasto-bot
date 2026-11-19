@@ -35,7 +35,7 @@
 ## Architecture
 - `src/index.ts` — Fastify server, route registration, graceful shutdown
 - `src/config.ts` — env validation, constants (thresholds, TTL, timezone)
-- `src/webhook.ts` — POST /webhook (Kapso payload), GET /health, GET+POST /cron/keep-alive
+- `src/webhook.ts` — POST /webhook (Kapso payload), POST /inbound/bank-email (raw MIME, bearer auth), GET /health, GET+POST /cron/keep-alive
 - `src/handler.ts` — core orchestrator: state check → parse → route intent → respond. Intents: `log_expense`, `query_summary`, `query_budget`, `set_budget`, `correct_expense`, `delete_expense`, `list_categories`, `monthly_closing`, `help`
 - `src/parse.ts` — single Claude Sonnet call per message (intent + extract + categorize)
 - `src/parse-image.ts` — Claude Vision call for receipts

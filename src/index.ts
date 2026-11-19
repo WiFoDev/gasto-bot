@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream';
 import Fastify from 'fastify';
 import webhookPlugin from './webhook.js';
-import { handleMessage } from './handler.js';
+import { handleBankEmail, handleMessage } from './handler.js';
 import { PORT } from './config.js';
 
 const server = Fastify();
@@ -29,7 +29,7 @@ server.setErrorHandler((error: Error, _request, reply) => {
   reply.status(500).send({ error: 'Internal server error' });
 });
 
-await server.register(webhookPlugin, { handleMessage });
+await server.register(webhookPlugin, { handleMessage, handleBankEmail });
 
 await server.listen({ port: PORT, host: '0.0.0.0' });
 

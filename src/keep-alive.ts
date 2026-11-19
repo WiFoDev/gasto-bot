@@ -46,7 +46,7 @@ async function probe(
  * Returns false when the secret is unset, so a misconfigured deploy rejects
  * every request rather than leaving the endpoint open.
  */
-export function isCronAuthorized(
+export function isBearerAuthorized(
   authHeader: string | null | undefined,
   expected: string | undefined,
 ): boolean {

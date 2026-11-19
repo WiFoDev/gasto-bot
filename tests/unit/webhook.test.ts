@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { Readable } from 'node:stream';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Fastify from 'fastify';
+import { BCP_EMAIL_FIXTURES, toMime } from '../fixtures/bcp-emails.js';
 
 // ── Mocks ────────────────────────────────────────────────────────
 
@@ -26,10 +27,17 @@ vi.mock('@kapso/whatsapp-cloud-api', () => ({
   },
 }));
 
+const inboundConfig = vi.hoisted(() => ({ secret: 'test-inbound-secret' as string | undefined }));
+
 vi.mock('../../src/config.js', () => ({
   KAPSO_API_KEY: 'test-kapso-key',
   KAPSO_WEBHOOK_SECRET: 'test-webhook-secret',
   CRON_SECRET: 'test-cron-secret',
+  KAPSO_PHONE_NUMBER_ID: 'pn_static',
+  BANK_EMAIL_USER_PHONE: '+51999888777',
+  get INBOUND_EMAIL_SECRET() {
+    return inboundConfig.secret;
+  },
 }));
 
 const mockPingDatabase = vi.fn().mockResolvedValue(undefined);
@@ -73,6 +81,7 @@ function makePayload(overrides: Record<string, unknown> = {}) {
 
 async function buildApp(
   handleMessage = vi.fn().mockResolvedValue({ text: 'OK logged' }),
+  handleBankEmail = vi.fn().mockResolvedValue('🏦 BCP · S/22.90 en Uber'),
 ) {
   const { default: webhookPlugin } = await import('../../src/webhook.js');
   const app = Fastify();
@@ -88,8 +97,8 @@ async function buildApp(
     return Readable.from(rawBody);
   });
 
-  await app.register(webhookPlugin, { handleMessage });
-  return { app, handleMessage };
+  await app.register(webhookPlugin, { handleMessage, handleBankEmail });
+  return { app, handleMessage, handleBankEmail };
 }
 
 function inject(
@@ -554,5 +563,169 @@ describe('webhook plugin', () => {
 
     expect(mockSendInteractiveButtons).not.toHaveBeenCalled();
     expect(mockSendText).toHaveBeenCalledWith(expect.objectContaining({ body: 'Hola' }));
+  });
+});
+
+// ── POST /inbound/bank-email (TASK-72) ───────────────────────────────
+
+describe('POST /inbound/bank-email', () => {
+  const INBOUND_SECRET = 'test-inbound-secret';
+  const purchase = BCP_EMAIL_FIXTURES[0];
+  const debit = BCP_EMAIL_FIXTURES.find((f) => f.label.startsWith('debit-card'))!;
+
+  function postEmail(
+    app: ReturnType<typeof Fastify>,
+    body: string,
+    { auth = `Bearer ${INBOUND_SECRET}`, contentType = 'message/rfc822' } = {},
+  ) {
+    return app.inject({
+      method: 'POST',
+      url: '/inbound/bank-email',
+      headers: { 'content-type': contentType, ...(auth ? { authorization: auth } : {}) },
+      payload: body,
+    });
+  }
+
+  let logs: string[];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    inboundConfig.secret = INBOUND_SECRET;
+    logs = [];
+    vi.spyOn(console, 'log').mockImplementation((line: unknown) => {
+      logs.push(String(line));
+    });
+  });
+
+  const events = () => logs.map((l) => { try { return JSON.parse(l); } catch { return {}; } });
+
+  describe('auth', () => {
+    it('401 without a bearer token', async () => {
+      const { app, handleBankEmail } = await buildApp();
+      const res = await postEmail(app, toMime(purchase.email), { auth: '' });
+      expect(res.statusCode).toBe(401);
+      expect(handleBankEmail).not.toHaveBeenCalled();
+    });
+
+    it('401 with the wrong token', async () => {
+      const { app, handleBankEmail } = await buildApp();
+      const res = await postEmail(app, toMime(purchase.email), { auth: 'Bearer nope-nope-nope-nope' });
+      expect(res.statusCode).toBe(401);
+      expect(handleBankEmail).not.toHaveBeenCalled();
+    });
+
+    it('401 when INBOUND_EMAIL_SECRET is not configured', async () => {
+      inboundConfig.secret = undefined;
+      const { app, handleBankEmail } = await buildApp();
+      const res = await postEmail(app, toMime(purchase.email), { auth: 'Bearer ' });
+      expect(res.statusCode).toBe(401);
+      expect(handleBankEmail).not.toHaveBeenCalled();
+      expect(events().some((e) => e.event === 'bank_email_unauthorized' && e.reason === 'secret_not_configured')).toBe(true);
+    });
+  });
+
+  it('happy path: parses, registers and notifies the configured user', async () => {
+    const { app, handleBankEmail } = await buildApp();
+
+    const res = await postEmail(app, toMime(purchase.email));
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ status: 'processed' });
+    expect(handleBankEmail).toHaveBeenCalledWith(expect.objectContaining({
+      bank: 'bcp',
+      amount: purchase.expected!.amount,
+      merchant: purchase.expected!.merchant,
+      operation_number: purchase.expected!.operation_number,
+    }));
+    expect(mockSendText).toHaveBeenCalledWith({
+      phoneNumberId: 'pn_static',
+      to: '+51999888777',
+      body: '🏦 BCP · S/22.90 en Uber',
+    });
+  });
+
+  it('accepts text/plain bodies too', async () => {
+    const { app, handleBankEmail } = await buildApp();
+    const res = await postEmail(app, toMime(purchase.email), { contentType: 'text/plain' });
+    expect(res.statusCode).toBe(200);
+    expect(handleBankEmail).toHaveBeenCalledOnce();
+  });
+
+  it('rejects a sender other than BCP with 200 and no side effects', async () => {
+    const { app, handleBankEmail } = await buildApp();
+
+    const res = await postEmail(app, toMime(purchase.email, 'Attacker <notificaciones@notificacionesbcp.com.pe.evil.com>'));
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ status: 'rejected' });
+    expect(handleBankEmail).not.toHaveBeenCalled();
+    expect(mockSendText).not.toHaveBeenCalled();
+    expect(events().some((e) => e.event === 'bank_email_rejected' && e.reason === 'wrong_sender')).toBe(true);
+  });
+
+  it('skips a non-consumo BCP email (debit card) with 200', async () => {
+    const { app, handleBankEmail } = await buildApp();
+
+    const res = await postEmail(app, toMime(debit.email));
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ status: 'skipped' });
+    expect(handleBankEmail).not.toHaveBeenCalled();
+    expect(events().some((e) => e.event === 'bank_email_skipped')).toBe(true);
+  });
+
+  it('an empty body is rejected with 200', async () => {
+    const { app, handleBankEmail } = await buildApp();
+    const res = await postEmail(app, '', { contentType: 'text/plain' });
+    expect(res.statusCode).toBe(200);
+    expect(handleBankEmail).not.toHaveBeenCalled();
+  });
+
+  it('duplicate (handler returns null): 200, no message sent', async () => {
+    const { app } = await buildApp(undefined, vi.fn().mockResolvedValue(null));
+
+    const res = await postEmail(app, toMime(purchase.email));
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ status: 'ignored' });
+    expect(mockSendText).not.toHaveBeenCalled();
+  });
+
+  it('notify failure still answers 200 and logs bank_notify_error', async () => {
+    mockSendText.mockRejectedValueOnce(new Error('Kapso 500'));
+    const { app, handleBankEmail } = await buildApp();
+
+    const res = await postEmail(app, toMime(purchase.email));
+
+    expect(res.statusCode).toBe(200);
+    expect(handleBankEmail).toHaveBeenCalledOnce();
+    expect(events().some((e) => e.event === 'bank_notify_error')).toBe(true);
+  });
+
+  it('handler error still answers 200 and logs bank_email_error', async () => {
+    const { app } = await buildApp(undefined, vi.fn().mockRejectedValue(new Error('db down')));
+
+    const res = await postEmail(app, toMime(purchase.email));
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ status: 'error' });
+    expect(mockSendText).not.toHaveBeenCalled();
+    expect(events().some((e) => e.event === 'bank_email_error')).toBe(true);
+  });
+
+  it('logs never carry the email body', async () => {
+    const { app } = await buildApp();
+    await postEmail(app, toMime(purchase.email));
+
+    const all = logs.join('\n');
+    expect(all).not.toContain('Total del consumo');
+    expect(all).not.toContain('<td');
+    const processed = events().find((e) => e.event === 'bank_email_processed');
+    expect(processed).toMatchObject({
+      amount: purchase.expected!.amount,
+      currency: purchase.expected!.currency,
+      merchant: purchase.expected!.merchant,
+      operation_number: purchase.expected!.operation_number,
+    });
   });
 });
