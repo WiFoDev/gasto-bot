@@ -1,0 +1,12 @@
+# Cloudflare Email Worker for GastoBot bank emails. Not part of the TS build.
+# Deploy: cd infra/email-worker && npx wrangler deploy
+# Secrets (never commit values):
+#   npx wrangler secret put INBOUND_URL           # https://<railway-host>/inbound/bank-email
+#   npx wrangler secret put INBOUND_EMAIL_SECRET  # same value as on Railway
+#   npx wrangler secret put ALLOWED_FORWARDER     # the Gmail address that forwards
+name = "gastobot-email-worker"
+main = "worker.js"
+compatibility_date = "2025-11-01"
+
+[observability]
+enabled = true
