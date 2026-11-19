@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { ANTHROPIC_API_KEY, DEFAULT_TIMEZONE } from './config.js';
 import { receiptParserPrompt } from './prompts/receipt-parser.js';
-import type { ReceiptResult } from './types.js';
+import type { Category, ReceiptResult } from './types.js';
 
 const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
@@ -15,6 +15,7 @@ function makeErrorResult(): ReceiptResult {
     date: null,
     confidence: 0,
     items: [],
+    category_slug: null,
   };
 }
 
@@ -46,6 +47,7 @@ export function detectMediaType(buffer: Buffer): MediaType {
 
 export async function parseReceipt(
   imageBuffer: Buffer,
+  categories: Category[],
 ): Promise<ReceiptResult> {
   const today = new Intl.DateTimeFormat('en-CA', {
     timeZone: DEFAULT_TIMEZONE,
@@ -60,7 +62,7 @@ export async function parseReceipt(
       model: 'claude-sonnet-4-5-20250929',
       max_tokens: 4096,
       temperature: 0,
-      system: receiptParserPrompt(today),
+      system: receiptParserPrompt(categories, today),
       messages: [
         {
           role: 'user',
@@ -90,11 +92,13 @@ export async function parseReceipt(
     const jsonStr = extractJson(raw);
     const parsed = JSON.parse(jsonStr) as ReceiptResult;
     if (!parsed.items) parsed.items = [];
+    if (parsed.category_slug === undefined) parsed.category_slug = null;
 
     console.log(JSON.stringify({
       event: 'parse',
       type: 'receipt',
       confidence: parsed.confidence,
+      category_slug: parsed.category_slug,
       latency_ms: Date.now() - startMs,
       timestamp: new Date().toISOString(),
     }));

@@ -121,6 +121,7 @@ export interface ReceiptResult {
   date: string | null;
   confidence: number;
   items: ReceiptItemParsed[];
+  category_slug: string | null;
 }
 
 export interface ReceiptItem {

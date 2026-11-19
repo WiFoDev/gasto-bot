@@ -4,7 +4,20 @@ import { describe, it, expect, afterAll } from 'vitest';
 import Anthropic from '@anthropic-ai/sdk';
 import { receiptParserPrompt } from '../../src/prompts/receipt-parser.js';
 import { RECEIPT_FIXTURES, type ReceiptFixture } from '../fixtures/receipts.js';
-import type { ReceiptResult } from '../../src/types.js';
+import type { Category, ReceiptResult } from '../../src/types.js';
+
+// Default categories (seed.sql) — same list the text-parse integration test uses
+const CATEGORIES: Category[] = [
+  { id: '1', user_id: 'u1', name: 'Food & Dining', slug: 'food_dining', icon: '🍽', is_default: true, created_at: '2026-01-01T00:00:00Z' },
+  { id: '2', user_id: 'u1', name: 'Transport', slug: 'transport', icon: '🚗', is_default: true, created_at: '2026-01-01T00:00:00Z' },
+  { id: '3', user_id: 'u1', name: 'Groceries', slug: 'groceries', icon: '🛒', is_default: true, created_at: '2026-01-01T00:00:00Z' },
+  { id: '4', user_id: 'u1', name: 'Entertainment', slug: 'entertainment', icon: '🎬', is_default: true, created_at: '2026-01-01T00:00:00Z' },
+  { id: '5', user_id: 'u1', name: 'Health', slug: 'health', icon: '💊', is_default: true, created_at: '2026-01-01T00:00:00Z' },
+  { id: '6', user_id: 'u1', name: 'Shopping', slug: 'shopping', icon: '🛍', is_default: true, created_at: '2026-01-01T00:00:00Z' },
+  { id: '7', user_id: 'u1', name: 'Bills & Utilities', slug: 'bills_utilities', icon: '💡', is_default: true, created_at: '2026-01-01T00:00:00Z' },
+  { id: '8', user_id: 'u1', name: 'Education', slug: 'education', icon: '📚', is_default: true, created_at: '2026-01-01T00:00:00Z' },
+  { id: '9', user_id: 'u1', name: 'Other', slug: 'other', icon: '📌', is_default: true, created_at: '2026-01-01T00:00:00Z' },
+];
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
@@ -47,7 +60,7 @@ async function parseReceipt(imageBuffer: Buffer, mediaType: MediaType): Promise<
     model: 'claude-sonnet-4-5-20250929',
     max_tokens: 1024,
     temperature: 0,
-    system: receiptParserPrompt(TODAY),
+    system: receiptParserPrompt(CATEGORIES, TODAY),
     messages: [
       {
         role: 'user',
@@ -84,6 +97,8 @@ interface FixtureResult {
   label: string;
   filename: string;
   checks: Check[];
+  /** Separate from the GATE #2 checks — only present when the fixture sets category_slug */
+  categoryCheck: Check | null;
 }
 
 function normalizeString(s: string): string {
@@ -167,9 +182,18 @@ describe('receipt parse accuracy validation (GATE #2)', () => {
       expect(result).toHaveProperty('confidence');
 
       const checks = evaluateFixture(fixture, result);
-      allResults.push({ label: fixture.label, filename: fixture.filename, checks });
+      const categoryCheck: Check | null =
+        fixture.expected.category_slug !== undefined
+          ? {
+              field: 'category_slug',
+              passed: result.category_slug === fixture.expected.category_slug,
+              expected: fixture.expected.category_slug,
+              actual: result.category_slug,
+            }
+          : null;
+      allResults.push({ label: fixture.label, filename: fixture.filename, checks, categoryCheck });
 
-      const failures = checks.filter((c) => !c.passed);
+      const failures = [...checks, ...(categoryCheck ? [categoryCheck] : [])].filter((c) => !c.passed);
       if (failures.length) {
         console.log(
           `  ⚠ "${fixture.filename}" — failures: ${failures.map((f) => `${f.field}(expected=${f.expected}, got=${f.actual})`).join(', ')}`,
@@ -220,7 +244,31 @@ describe('receipt parse accuracy validation (GATE #2)', () => {
       console.log('');
     }
 
+    const categoryChecks = allResults
+      .map((r) => r.categoryCheck)
+      .filter((c): c is Check => c !== null);
+    const categoryPassed = categoryChecks.filter((c) => c.passed).length;
+    const categoryAccuracy = categoryChecks.length ? categoryPassed / categoryChecks.length : 1;
+    if (categoryChecks.length) {
+      console.log(
+        `  Category: ${categoryPassed}/${categoryChecks.length} = ${(categoryAccuracy * 100).toFixed(1)}%`,
+      );
+      for (const r of allResults) {
+        if (r.categoryCheck && !r.categoryCheck.passed) {
+          console.log(
+            `    "${r.filename}" — category_slug: expected=${r.categoryCheck.expected}, got=${r.categoryCheck.actual}`,
+          );
+        }
+      }
+      console.log('');
+    }
+
     console.log('══════════════════════════════════════════════\n');
+
+    expect(
+      categoryAccuracy,
+      `Receipt category accuracy ${(categoryAccuracy * 100).toFixed(1)}% is below the 70% threshold`,
+    ).toBeGreaterThanOrEqual(0.7);
 
     expect(
       accuracy,

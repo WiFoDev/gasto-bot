@@ -254,6 +254,25 @@
   - Unit tests: button cases in `handler.test.ts`, `webhook.test.ts`,
     `formatter.test.ts`
 
+- [x] TASK-78: Receipt category from Vision
+  - Receipts were always saved under `other`; the Vision parse now picks the
+    category in the same single call — no extra LLM call
+  - `src/types.ts`: `ReceiptResult` gains `category_slug: string | null`
+  - `src/prompts/receipt-parser.ts`: `receiptParserPrompt(categories, today)`
+    lists the user's categories and asks for the one slug that fits the whole
+    purchase (supermarket → groceries, restaurant → food_dining, pharmacy →
+    health), or null when unsure
+  - `src/parse-image.ts`: `parseReceipt(imageBuffer, categories)`; missing /
+    error → `category_slug: null`
+  - `src/handler.ts`: `handleImageMessage` accepts the slug only if it matches a
+    user category, else falls back to `other`; sets `pending.category_slug` and
+    shows that category in the receipt confirmation (buttons unchanged)
+  - No new-category suggestion for receipts (out of scope)
+  - Unit tests: `parse-image.test.ts`, `handler.test.ts` (valid slug, unknown
+    slug → other, null → other, categories passed to prompt). Integration:
+    optional `category_slug` on receipt fixtures feeds a category-accuracy
+    check (≥ 70%) next to GATE #2
+
 ---
 
 ### Future Ideas (Not Scoped)

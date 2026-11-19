@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { ReceiptResult } from '../../src/types.js';
+import type { Category, ReceiptResult } from '../../src/types.js';
 
 // Shared mock reference — set per test via beforeEach
 let mockCreate: ReturnType<typeof vi.fn>;
@@ -21,6 +21,12 @@ vi.mock('../../src/config.js', () => ({
 
 import { parseReceipt, detectMediaType } from '../../src/parse-image.js';
 
+const categories: Category[] = [
+  { id: 'cat-groceries', user_id: 'user-1', name: 'Groceries', slug: 'groceries', icon: '🛒', is_default: true, created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cat-health', user_id: 'user-1', name: 'Health', slug: 'health', icon: '💊', is_default: true, created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cat-other', user_id: 'user-1', name: 'Other', slug: 'other', icon: '📦', is_default: true, created_at: '2026-01-01T00:00:00Z' },
+];
+
 describe('parseReceipt', () => {
   beforeEach(() => {
     mockCreate = vi.fn();
@@ -34,6 +40,7 @@ describe('parseReceipt', () => {
       date: '2026-02-25',
       confidence: 0.92,
       items: [],
+      category_slug: null,
     };
 
     mockCreate.mockResolvedValueOnce({
@@ -42,7 +49,7 @@ describe('parseReceipt', () => {
 
     // Minimal JPEG buffer (starts with 0xFF 0xD8)
     const fakeJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
-    const result = await parseReceipt(fakeJpeg);
+    const result = await parseReceipt(fakeJpeg, categories);
 
     expect(result).toEqual(apiResponse);
     expect(result.merchant).toBe('Plaza Vea');
@@ -59,6 +66,7 @@ describe('parseReceipt', () => {
       date: '2026-02-24',
       confidence: 0.85,
       items: [],
+      category_slug: null,
     };
 
     mockCreate.mockResolvedValueOnce({
@@ -71,7 +79,7 @@ describe('parseReceipt', () => {
     });
 
     const fakeJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
-    const result = await parseReceipt(fakeJpeg);
+    const result = await parseReceipt(fakeJpeg, categories);
 
     expect(result.merchant).toBe('Wong');
     expect(result.amount).toBe(89.9);
@@ -83,7 +91,7 @@ describe('parseReceipt', () => {
     });
 
     const fakeJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
-    const result = await parseReceipt(fakeJpeg);
+    const result = await parseReceipt(fakeJpeg, categories);
 
     expect(result.merchant).toBeNull();
     expect(result.amount).toBeNull();
@@ -94,7 +102,7 @@ describe('parseReceipt', () => {
     mockCreate.mockRejectedValueOnce(new Error('API rate limit exceeded'));
 
     const fakeJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
-    const result = await parseReceipt(fakeJpeg);
+    const result = await parseReceipt(fakeJpeg, categories);
 
     expect(result.merchant).toBeNull();
     expect(result.amount).toBeNull();
@@ -105,7 +113,7 @@ describe('parseReceipt', () => {
     mockCreate.mockResolvedValueOnce({ content: [] });
 
     const fakeJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
-    const result = await parseReceipt(fakeJpeg);
+    const result = await parseReceipt(fakeJpeg, categories);
 
     expect(result.merchant).toBeNull();
     expect(result.amount).toBeNull();
@@ -118,7 +126,7 @@ describe('parseReceipt', () => {
     });
 
     const fakeJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
-    const result = await parseReceipt(fakeJpeg);
+    const result = await parseReceipt(fakeJpeg, categories);
 
     expect(result.confidence).toBe(0);
   });
@@ -135,6 +143,7 @@ describe('parseReceipt', () => {
         { description: 'Pechuga de Pollo', quantity: 1, unit_price: 18.90, total: 18.90, subcategory: 'proteina' },
         { description: 'Detergente Bolivar', quantity: 1, unit_price: 12.50, total: 12.50, subcategory: 'limpieza' },
       ],
+      category_slug: 'groceries',
     };
 
     mockCreate.mockResolvedValueOnce({
@@ -142,7 +151,7 @@ describe('parseReceipt', () => {
     });
 
     const fakeJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
-    const result = await parseReceipt(fakeJpeg);
+    const result = await parseReceipt(fakeJpeg, categories);
 
     expect(result.items).toHaveLength(3);
     expect(result.items[0]).toEqual({
@@ -170,7 +179,7 @@ describe('parseReceipt', () => {
     });
 
     const fakeJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
-    const result = await parseReceipt(fakeJpeg);
+    const result = await parseReceipt(fakeJpeg, categories);
 
     expect(result.items).toEqual([]);
   });
@@ -183,6 +192,7 @@ describe('parseReceipt', () => {
       date: null,
       confidence: 0.45,
       items: [],
+      category_slug: null,
     };
 
     mockCreate.mockResolvedValueOnce({
@@ -190,7 +200,7 @@ describe('parseReceipt', () => {
     });
 
     const fakeJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
-    const result = await parseReceipt(fakeJpeg);
+    const result = await parseReceipt(fakeJpeg, categories);
 
     expect(result.merchant).toBeNull();
     expect(result.amount).toBe(50.0);
@@ -206,6 +216,7 @@ describe('parseReceipt', () => {
       date: '2026-02-25',
       confidence: 0.9,
       items: [],
+      category_slug: null,
     };
 
     mockCreate.mockResolvedValueOnce({
@@ -214,7 +225,7 @@ describe('parseReceipt', () => {
 
     // PNG magic bytes (must be >= 12 bytes for detectMediaType)
     const fakePng = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]);
-    await parseReceipt(fakePng);
+    await parseReceipt(fakePng, categories);
 
     expect(mockCreate).toHaveBeenCalledOnce();
     const callArgs = mockCreate.mock.calls[0][0];
@@ -233,6 +244,58 @@ describe('parseReceipt', () => {
     const textContent = callArgs.messages[0].content[1];
     expect(textContent.type).toBe('text');
     expect(textContent.text).toContain('Extract');
+  });
+
+  it('returns the category_slug chosen by the model', async () => {
+    const apiResponse: ReceiptResult = {
+      merchant: 'InkaFarma',
+      amount: 32.9,
+      currency: 'PEN',
+      date: '2026-03-01',
+      confidence: 0.93,
+      items: [],
+      category_slug: 'health',
+    };
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify(apiResponse) }],
+    });
+
+    const result = await parseReceipt(Buffer.from([0xff, 0xd8, 0xff, 0xe0]), categories);
+
+    expect(result.category_slug).toBe('health');
+  });
+
+  it('defaults category_slug to null when missing from response', async () => {
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify({ merchant: 'Wong', amount: 50, currency: 'PEN', date: '2026-03-01', confidence: 0.9, items: [] }) }],
+    });
+
+    const result = await parseReceipt(Buffer.from([0xff, 0xd8, 0xff, 0xe0]), categories);
+
+    expect(result.category_slug).toBeNull();
+  });
+
+  it('returns category_slug null in the error result', async () => {
+    mockCreate.mockRejectedValueOnce(new Error('boom'));
+
+    const result = await parseReceipt(Buffer.from([0xff, 0xd8, 0xff, 0xe0]), categories);
+
+    expect(result.category_slug).toBeNull();
+  });
+
+  it('passes the user categories to the system prompt in a single call', async () => {
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify({ merchant: 'Wong', amount: 50, currency: 'PEN', date: '2026-03-01', confidence: 0.9, items: [], category_slug: 'groceries' }) }],
+    });
+
+    await parseReceipt(Buffer.from([0xff, 0xd8, 0xff, 0xe0]), categories);
+
+    expect(mockCreate).toHaveBeenCalledOnce();
+    const system = mockCreate.mock.calls[0][0].system as string;
+    expect(system).toContain('"groceries"');
+    expect(system).toContain('Groceries');
+    expect(system).toContain('"health"');
+    expect(system).toContain('category_slug');
   });
 });
 

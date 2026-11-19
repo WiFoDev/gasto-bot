@@ -584,6 +584,69 @@ describe('handleMessage', () => {
       expect(result).toContain('Other');
     });
 
+    it('passes the user categories to parseReceipt', async () => {
+      mockedParseReceipt.mockResolvedValue({
+        merchant: 'Wong', amount: 50, currency: 'PEN', date: '2026-02-27', confidence: 0.9, items: [], category_slug: 'groceries',
+      });
+
+      await handleMessage(PHONE, 'image', IMAGE_URL);
+
+      expect(mockedParseReceipt).toHaveBeenCalledWith(expect.any(Buffer), mockCategories);
+    });
+
+    it('uses the Vision category_slug when it matches a user category', async () => {
+      mockedParseReceipt.mockResolvedValue({
+        merchant: 'Plaza Vea', amount: 53.75, currency: 'PEN', date: '2026-02-27', confidence: 0.9, items: [], category_slug: 'groceries',
+      });
+
+      const reply = await handleMessageReply(PHONE, 'image', IMAGE_URL);
+
+      expect(reply.text).toContain('Groceries');
+      expect(reply.text).not.toContain('Other');
+      expect(reply.buttons).toEqual(expenseConfirmButtons());
+      expect(getState(PHONE)!.pendingExpense!.category_slug).toBe('groceries');
+
+      await handleMessage(PHONE, 'text', 'si');
+
+      expect(mockedInsertExpense).toHaveBeenCalledWith(
+        expect.objectContaining({ category_id: 'cat-groceries', source: 'image', amount: 53.75 }),
+      );
+    });
+
+    it('falls back to "other" when the Vision category_slug is unknown', async () => {
+      mockedParseReceipt.mockResolvedValue({
+        merchant: 'Pet Shop', amount: 40, currency: 'PEN', date: '2026-02-27', confidence: 0.9, items: [], category_slug: 'pets',
+      });
+
+      const result = await handleMessage(PHONE, 'image', IMAGE_URL);
+
+      expect(result).toContain('Other');
+      expect(getState(PHONE)!.pendingExpense!.category_slug).toBe('other');
+
+      await handleMessage(PHONE, 'text', 'si');
+
+      expect(mockedInsertExpense).toHaveBeenCalledWith(
+        expect.objectContaining({ category_id: 'cat-other' }),
+      );
+    });
+
+    it('falls back to "other" when the Vision category_slug is null', async () => {
+      mockedParseReceipt.mockResolvedValue({
+        merchant: 'Some Store', amount: 40, currency: 'PEN', date: '2026-02-27', confidence: 0.9, items: [], category_slug: null,
+      });
+
+      const result = await handleMessage(PHONE, 'image', IMAGE_URL);
+
+      expect(result).toContain('Other');
+      expect(getState(PHONE)!.pendingExpense!.category_slug).toBe('other');
+
+      await handleMessage(PHONE, 'text', 'si');
+
+      expect(mockedInsertExpense).toHaveBeenCalledWith(
+        expect.objectContaining({ category_id: 'cat-other' }),
+      );
+    });
+
     it('uses user currency when receipt currency is null', async () => {
       mockedParseReceipt.mockResolvedValue({
         merchant: 'Store',

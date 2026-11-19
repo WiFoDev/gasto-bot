@@ -7,6 +7,8 @@ export interface ReceiptFixture {
     merchant: string;
     amount: number;
     currency?: string;
+    /** Expected category slug — only set for receipts with an obvious category */
+    category_slug?: string;
   };
 }
 

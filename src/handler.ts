@@ -611,7 +611,7 @@ async function handleImageMessage(
   }
 
   // 2. Parse receipt with vision
-  const receipt = await parseReceipt(buffer);
+  const receipt = await parseReceipt(buffer, categories);
 
   // 3. Upload to Supabase Storage (image data is important for future fine-tuning)
   const storageId = crypto.randomUUID();
@@ -630,10 +630,16 @@ async function handleImageMessage(
 
   const today = getTodayDate(user.timezone);
 
+  // Accept the Vision category only if it is one of the user's categories
+  const category =
+    categories.find((c) => c.slug === receipt.category_slug) ??
+    categories.find((c) => c.slug === 'other') ??
+    categories[0];
+
   const pending: PendingExpense = {
     amount: receipt.amount ?? 0,
     currency: receipt.currency ?? user.currency,
-    category_slug: null,
+    category_slug: category?.slug ?? null,
     suggested_category_name: null,
     description: null,
     merchant: receipt.merchant,
@@ -653,9 +659,6 @@ async function handleImageMessage(
     receipt.amount != null &&
     receipt.amount > 0
   ) {
-    const category =
-      categories.find((c) => c.slug === 'other') ?? categories[0];
-
     setState(phone, {
       lastAction: 'awaiting_confirmation',
       pendingExpense: pending,

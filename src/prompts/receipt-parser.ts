@@ -1,4 +1,10 @@
-export function receiptParserPrompt(today: string): string {
+import type { Category } from '../types.js';
+
+export function receiptParserPrompt(categories: Category[], today: string): string {
+  const categoryList = categories
+    .map((c) => `  - "${c.slug}" → ${c.name} ${c.icon}`)
+    .join('\n');
+
   return `You are GastoBot's receipt reader. You receive a photo of a receipt and must extract structured data from it.
 
 Today's date: ${today}
@@ -11,6 +17,7 @@ Extract the following from the receipt image:
 3. **Date** — when the purchase was made
 4. **Currency** — what currency was used
 5. **Line items** — individual products/services on the receipt
+6. **Category** — which of the user's categories the purchase belongs to
 
 ## Total amount extraction
 
@@ -84,6 +91,19 @@ Rules:
 - Items sum may not exactly equal the total (due to rounding, discounts, taxes) — that is OK
 - For non-itemized receipts (e.g., restaurant bills with just a total), return an empty items array
 
+## Category selection
+
+Valid categories:
+${categoryList}
+
+Set "category_slug" to the ONE slug from the list above that best fits the purchase as a whole, based on the merchant type and the items. The receipt is a single expense — pick one category for the whole receipt, not per item. Examples:
+- Supermarket (Plaza Vea, Wong, Metro, Tottus, Vivanda, Mass) → groceries
+- Restaurant, café, fast food (KFC, Bembos, China Wok, Norky's) → food_dining
+- Pharmacy (InkaFarma, MiFarma, Boticas Arcangel) → health
+- Gas station / fuel → transport
+
+Only use slugs that appear in the list above. If no listed category clearly fits or you are unsure, set "category_slug" to null.
+
 ## Confidence scoring
 
 Return a confidence score between 0.0 and 1.0:
@@ -108,6 +128,7 @@ Respond with ONLY a JSON object, no markdown, no explanation, no extra text:
   "currency": <string or null>,
   "date": <string or null>,
   "confidence": <number>,
+  "category_slug": <string or null>,
   "items": [
     {
       "description": <string>,

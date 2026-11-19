@@ -10,9 +10,13 @@ Example entry in `receipts.ts`:
 {
   filename: 'my-receipt-01.png',
   label: 'Local market receipt',
-  expected: { merchant: 'Local Market', amount: 42.50 },
+  expected: { merchant: 'Local Market', amount: 42.50, category_slug: 'groceries' },
 },
 ```
+
+`category_slug` is optional — set it only when the receipt has an obvious
+category (supermarket → `groceries`, pharmacy → `health`, ...). Fixtures with it
+feed a separate category-accuracy check (≥ 70%) alongside GATE #2.
 
 Images over 5MB must be resized — the Anthropic Vision API rejects them.
 
