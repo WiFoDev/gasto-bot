@@ -363,7 +363,7 @@
     Scope decision: credit card only — debit-card "consumo" and credit-card
     "operación" emails return null
 
-- [ ] TASK-68: Merchant memory (skip Claude for known merchants)
+- [x] TASK-68: Merchant memory (skip Claude for known merchants)
   - Depends on: TASK-66
   - `src/utils.ts`: `normalizeMerchant()` — strip `DLC*`, `IZI*`, `*` payment
     processor prefixes, collapse whitespace, uppercase
@@ -373,6 +373,10 @@
     Once the user corrects a category via WhatsApp, every later email from
     that merchant follows the correction with zero LLM cost
   - Unit tests: `utils.test.ts` (normalization cases), db mock test
+  - **Note for TASK-71**: store the RAW bank merchant (`DLC*UBER RIDES`) in
+    `expenses.merchant` (clean name goes in `description`) — memory matches
+    on `normalizeMerchant(expenses.merchant)`. A star followed by a space
+    (`ANTHROPIC* CLAUDE SUB`) is the merchant's own descriptor, not stripped
 
 - [ ] TASK-69: Merchant categorizer prompt + accuracy test 🚧 GATE #5
   - Depends on: TASK-67

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
+import { normalizeMerchant } from './utils.js';
 import type { User, Category, Expense, CategoryTotal, SummaryResult, Budget, MonthlyClosingData, ReceiptItem, ReceiptItemParsed, FinancialRule, RuleType } from './types.js';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -121,6 +122,33 @@ export async function getExpenseByBankReference(
 
   if (error) throw error;
   return data;
+}
+
+/**
+ * Merchant memory: the user's most recent non-deleted expense whose merchant
+ * normalizes to `normalizedMerchant` (see `normalizeMerchant`). ILIKE narrows
+ * the rows; the exact match happens here because the prefix strip isn't SQL.
+ */
+export async function getLastExpenseByMerchant(
+  userId: string,
+  normalizedMerchant: string,
+): Promise<Expense | null> {
+  const pattern = `%${normalizedMerchant.replace(/[\\%_]/g, '\\$&')}%`;
+  const { data, error } = await supabase
+    .from('expenses')
+    .select('*')
+    .eq('user_id', userId)
+    .is('deleted_at', null)
+    .ilike('merchant', pattern)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  if (error) throw error;
+  return (
+    (data ?? []).find(
+      (e: Expense) => e.merchant !== null && normalizeMerchant(e.merchant) === normalizedMerchant,
+    ) ?? null
+  );
 }
 
 export async function getLastExpense(userId: string): Promise<Expense | null> {

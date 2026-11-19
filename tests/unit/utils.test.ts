@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { slugify } from '../../src/utils.js';
+import { slugify, normalizeMerchant } from '../../src/utils.js';
 
 describe('slugify', () => {
   it('converts to lowercase', () => {
@@ -56,5 +56,51 @@ describe('slugify', () => {
 
   it('handles ñ correctly', () => {
     expect(slugify('Niños')).toBe('ninos');
+  });
+});
+
+describe('normalizeMerchant', () => {
+  // Real BCP "Empresa" strings
+  it.each([
+    ['DLC*UBER RIDES', 'UBER RIDES'],
+    ['IZI*X3 PADEL CLUB', 'X3 PADEL CLUB'],
+    ['PYU*UBER', 'UBER'],
+    ['PYU*Cabify PE', 'CABIFY PE'],
+    ['Rapyd*Cabify PE', 'CABIFY PE'],
+    ['WL *STEAM PURCHASE', 'STEAM PURCHASE'],
+    ['MDOPAGO*FREEPASS', 'FREEPASS'],
+    ['OPENPAY*TERAPIAS CV SALIM', 'TERAPIAS CV SALIM'],
+  ])('strips the payment-processor prefix: %s → %s', (input, expected) => {
+    expect(normalizeMerchant(input)).toBe(expected);
+  });
+
+  it.each([
+    ['CABIFY PE', 'CABIFY PE'],
+    ['E WONG BENAVIDES', 'E WONG BENAVIDES'],
+    ['APPLE.COM/BILL', 'APPLE.COM/BILL'],
+    ['One padel Orue', 'ONE PADEL ORUE'],
+  ])('leaves merchants without a prefix alone (uppercased): %s', (input, expected) => {
+    expect(normalizeMerchant(input)).toBe(expected);
+  });
+
+  it('makes processor variants of the same merchant equal', () => {
+    expect(normalizeMerchant('PYU*Cabify PE')).toBe(normalizeMerchant('CABIFY PE'));
+  });
+
+  it('collapses and trims whitespace', () => {
+    expect(normalizeMerchant('  DLC*UBER    RIDES  ')).toBe('UBER RIDES');
+  });
+
+  it('only strips one prefix', () => {
+    expect(normalizeMerchant('DLC*IZI*FOO')).toBe('IZI*FOO');
+  });
+
+  it('keeps the original when stripping would leave nothing', () => {
+    expect(normalizeMerchant('DLC*')).toBe('DLC*');
+  });
+
+  it('does not strip "NAME* PRODUCT" (space after the star)', () => {
+    // Card-network descriptor convention: the merchant itself, not a processor code
+    expect(normalizeMerchant('ANTHROPIC* CLAUDE SUB')).toBe('ANTHROPIC* CLAUDE SUB');
   });
 });
