@@ -19,9 +19,13 @@ import {
   insertRule,
   getActiveRules,
   deleteRule,
+  getExpenseByBankReference,
+  getLastExpenseByMerchant,
 } from './db.js';
 import { parseMessage } from './parse.js';
 import { parseReceipt } from './parse-image.js';
+import { categorizeMerchant } from './categorize-merchant.js';
+import { bankReference } from './parse-bank-email.js';
 import { downloadImage, uploadImage } from './storage.js';
 import { getState, setState, clearState } from './state.js';
 import {
@@ -58,15 +62,17 @@ import {
   formatRuleViolation,
   formatNoRuleFound,
   formatButtonExpired,
+  formatBankExpenseLogged,
   expenseConfirmButtons,
   newCategoryButtons,
   BUTTON_IDS,
 } from './formatter.js';
-import { slugify } from './utils.js';
+import { normalizeMerchant, slugify } from './utils.js';
 import { checkRules } from './rules.js';
 import type { PeriodSpending } from './rules.js';
-import { CONFIDENCE_AUTO_LOG, CONFIDENCE_CONFIRM } from './config.js';
+import { BANK_EMAIL_USER_PHONE, CONFIDENCE_AUTO_LOG, CONFIDENCE_CONFIRM } from './config.js';
 import type {
+  BankTransaction,
   BotReply,
   Category,
   Expense,
@@ -148,6 +154,7 @@ async function resolveAndInsertExpense(
   user: User,
   pending: PendingExpense,
   categories: Category[],
+  bankRef: string | null = null,
 ): Promise<{ expense: Expense; category: Category }> {
   const category = pending.category_slug
     ? await getCategoryBySlug(user.id, pending.category_slug)
@@ -172,7 +179,7 @@ async function resolveAndInsertExpense(
     ai_confidence: pending.ai_confidence,
     payment_type: pending.payment_type,
     payment_method_name: pending.payment_method_name,
-    bank_reference: null,
+    bank_reference: bankRef,
   });
 
   if (pending.items.length > 0) {
@@ -856,7 +863,16 @@ export async function handleMessage(
   type: InboundMessageType,
   content: string,
 ): Promise<BotReply> {
-  return toReply(await handleMessageSafe(phone, type, content));
+  return toReply(await handleMessageSafe(toE164(phone), type, content));
+}
+
+/**
+ * Kapso may send the number with or without "+". Normalizing once here keeps
+ * conversation state keyed the same way as `users.phone`, which is also what
+ * `handleBankEmail` uses, so "borra eso" finds a bank-email expense.
+ */
+function toE164(phone: string): string {
+  return phone.startsWith('+') ? phone : `+${phone}`;
 }
 
 function toReply(reply: string | BotReply): BotReply {
@@ -892,9 +908,8 @@ async function handleMessageInner(
 ): Promise<string | BotReply> {
   let content = rawContent;
 
-  // 1. Get user — normalize phone to E.164 (+country format)
-  const normalizedPhone = phone.startsWith('+') ? phone : `+${phone}`;
-  const user = await getUserByPhone(normalizedPhone);
+  // 1. Get user (phone already E.164, see handleMessage)
+  const user = await getUserByPhone(phone);
   if (!user) {
     return formatUnknownUser();
   }
@@ -1247,4 +1262,112 @@ async function handleMessageInner(
     default:
       return formatError();
   }
+}
+
+// ── Bank email (Phase 6) ────────────────────────────────────────────
+
+/** Postgres unique_violation: a concurrent delivery of the same email won the insert. */
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === '23505';
+}
+
+/**
+ * Registers a card purchase parsed from a forwarded BCP email and returns the
+ * WhatsApp confirmation, or null when nothing should be sent (no configured
+ * user, or the email was already processed). Never asks a question: anything
+ * uncertain is filed under `other` and the user corrects it with the existing
+ * "eso fue …" / "borra eso" intents.
+ */
+export async function handleBankEmail(tx: BankTransaction): Promise<string | null> {
+  const ref = bankReference(tx);
+  const log = (event: string, extra: Record<string, unknown> = {}) =>
+    console.log(JSON.stringify({ event, bankReference: ref, ...extra, timestamp: new Date().toISOString() }));
+
+  // 1. Resolve the single configured user
+  if (!BANK_EMAIL_USER_PHONE) {
+    log('bank_email_no_user', { reason: 'phone_not_configured' });
+    return null;
+  }
+  const user = await getUserByPhone(toE164(BANK_EMAIL_USER_PHONE));
+  if (!user) {
+    log('bank_email_no_user', { reason: 'unknown_phone' });
+    return null;
+  }
+
+  // 2. Idempotency: the bank (or the forwarder) may deliver the same email twice
+  if (await getExpenseByBankReference(user.id, ref)) {
+    log('bank_email_duplicate');
+    return null;
+  }
+
+  // 3. Category: merchant memory first, else one categorizer call
+  const categories = await getCategories(user.id);
+  const remembered = await getLastExpenseByMerchant(user.id, normalizeMerchant(tx.merchant));
+  const rememberedCategory = remembered
+    ? categories.find((c) => c.id === remembered.category_id) ?? null
+    : null;
+
+  let categorySlug: string | null;
+  let description: string;
+  let confidence: number;
+
+  if (remembered && rememberedCategory) {
+    categorySlug = rememberedCategory.slug;
+    description = remembered.description ?? tx.merchant;
+    confidence = 1;
+  } else {
+    const result = await categorizeMerchant(tx.merchant, tx.amount, tx.currency, categories);
+    // Below the confirm threshold (or a new-category suggestion) → `other`.
+    categorySlug = result.confidence >= CONFIDENCE_CONFIRM ? result.category_slug : null;
+    description = result.description ?? tx.merchant;
+    confidence = result.confidence;
+  }
+
+  log('bank_email_categorized', {
+    source: rememberedCategory ? 'memory' : 'categorizer',
+    category: categorySlug ?? 'other',
+    confidence,
+  });
+
+  // 4. Insert
+  const pending: PendingExpense = {
+    amount: tx.amount,
+    currency: tx.currency,
+    category_slug: categorySlug,
+    suggested_category_name: null,
+    description,
+    merchant: tx.merchant,
+    date: tx.date,
+    source: 'email',
+    raw_input: tx.raw_text,
+    image_url: null,
+    ai_confidence: confidence,
+    payment_type: 'credit_card',
+    payment_method_name: `${tx.bank.toUpperCase()} ***${tx.card_last4}`,
+    items: [],
+  };
+
+  let inserted: { expense: Expense; category: Category };
+  try {
+    inserted = await resolveAndInsertExpense(user, pending, categories, ref);
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      log('bank_email_duplicate', { race: true });
+      return null;
+    }
+    throw error;
+  }
+  const { expense, category } = inserted;
+
+  // 6. Make the expense the target of "eso fue …" / "borra eso"
+  setState(toE164(user.phone), {
+    lastAction: 'expense_logged',
+    pendingExpense: null,
+    lastExpenseId: expense.id,
+    updatedAt: Date.now(),
+  });
+
+  // 5. Budget alerts and rule violations, same as manual entries
+  const alerts = await getAllAlerts(user, expense, categories);
+  return appendAlerts(formatBankExpenseLogged(expense, category, tx), alerts);
 }

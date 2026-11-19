@@ -1,4 +1,4 @@
-import type { Expense, Category, PendingExpense, Budget, SummaryResult, MonthlyClosingData, PaymentType, FinancialRule, ReplyButton } from './types.js';
+import type { BankTransaction, Expense, Category, PendingExpense, Budget, SummaryResult, MonthlyClosingData, PaymentType, FinancialRule, ReplyButton } from './types.js';
 import type { RuleViolation } from './rules.js';
 
 const MAX_DESCRIPTION_LENGTH = 50;
@@ -69,6 +69,24 @@ export function formatExpenseConfirmation(
   const line2 = detail.join(' · ');
 
   return `${line1}\n${line2}`;
+}
+
+/**
+ * Confirmation for an expense registered from a forwarded bank email.
+ * Unprompted, so it carries the card and a one-line hint on how to fix it.
+ */
+export function formatBankExpenseLogged(
+  expense: Expense,
+  category: Category,
+  tx: BankTransaction,
+): string {
+  const amount = formatCurrency(expense.amount, expense.currency);
+  const name = truncate(expense.description ?? expense.merchant ?? tx.merchant, MAX_DESCRIPTION_LENGTH);
+  return [
+    `🏦 ${tx.bank.toUpperCase()} · ${amount} en ${name} → ${category.icon} ${category.name}`,
+    `💳 ***${tx.card_last4} · ${formatDate(expense.date)}`,
+    'Para cambiarla: "eso fue <categoría>" · para eliminarla: "borra eso"',
+  ].join('\n');
 }
 
 export function formatClarification(pending: PendingExpense): string {

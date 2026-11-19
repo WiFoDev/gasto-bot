@@ -36,8 +36,9 @@ import {
   formatRuleList,
   formatRuleViolation,
   formatNoRuleFound,
+  formatBankExpenseLogged,
 } from '../../src/formatter.js';
-import type { Expense, Category, PendingExpense, Budget, SummaryResult, MonthlyClosingData, ReceiptItemParsed, FinancialRule, RuleType } from '../../src/types.js';
+import type { BankTransaction, Expense, Category, PendingExpense, Budget, SummaryResult, MonthlyClosingData, ReceiptItemParsed, FinancialRule, RuleType } from '../../src/types.js';
 import type { RuleViolation } from '../../src/rules.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -1810,5 +1811,60 @@ describe('confirmation buttons', () => {
     expect(formatButtonExpired()).toMatchInlineSnapshot(
       `"Ese botón ya no está activo. Si querías registrar un gasto, envíamelo de nuevo."`,
     );
+  });
+});
+
+// ── formatBankExpenseLogged ──────────────────────────────────────────
+
+describe('formatBankExpenseLogged', () => {
+  const tx: BankTransaction = {
+    bank: 'bcp',
+    amount: 34,
+    currency: 'PEN',
+    merchant: 'IZI*SIENNA BAKERY',
+    date: '2026-11-18',
+    time: '13:05',
+    card_last4: '1234',
+    operation_number: '0000700001',
+    raw_text: 'Realizaste un consumo…',
+  };
+  const bankExpense = (overrides: Partial<Expense> = {}) =>
+    makeExpense({
+      amount: 34,
+      description: 'Sienna Bakery',
+      merchant: 'IZI*SIENNA BAKERY',
+      date: '2026-11-18',
+      source: 'email',
+      payment_type: 'credit_card',
+      payment_method_name: 'BCP ***1234',
+      bank_reference: 'bcp:0000700001',
+      ...overrides,
+    });
+
+  it('shows bank, amount, clean name, category, card and a correction hint', () => {
+    expect(formatBankExpenseLogged(bankExpense(), makeCategory(), tx)).toMatchInlineSnapshot(`
+      "🏦 BCP · S/34.00 en Sienna Bakery → 🍽 Food & Dining
+      💳 ***1234 · 18 nov
+      Para cambiarla: "eso fue <categoría>" · para eliminarla: "borra eso""
+    `);
+  });
+
+  it('keeps USD as dollars', () => {
+    const usdTx = { ...tx, amount: 20, currency: 'USD', merchant: 'ANTHROPIC* CLAUDE SUB' };
+    const result = formatBankExpenseLogged(
+      bankExpense({ amount: 20, currency: 'USD', description: 'Anthropic', merchant: usdTx.merchant }),
+      makeCategory({ name: 'Suscripciones', icon: '🔁', slug: 'suscripciones' }),
+      usdTx,
+    );
+    expect(result).toMatchInlineSnapshot(`
+      "🏦 BCP · $20.00 en Anthropic → 🔁 Suscripciones
+      💳 ***1234 · 18 nov
+      Para cambiarla: "eso fue <categoría>" · para eliminarla: "borra eso""
+    `);
+  });
+
+  it('falls back to the raw merchant when there is no description', () => {
+    const result = formatBankExpenseLogged(bankExpense({ description: null }), makeCategory(), tx);
+    expect(result).toContain('en IZI*SIENNA BAKERY');
   });
 });

@@ -408,7 +408,7 @@
   - Unit tests: `tests/unit/whatsapp.test.ts`; existing `webhook.test.ts`
     keeps passing
 
-- [ ] TASK-71: `handleBankEmail()` — register + confirm ⚡ CRITICAL PATH
+- [x] TASK-71: `handleBankEmail()` — register + confirm ⚡ CRITICAL PATH
   - Depends on: TASK-67 (GATE #4), TASK-68, TASK-69 (GATE #5), TASK-70
   - `src/handler.ts`: `handleBankEmail(tx: BankTransaction): Promise<string | null>`
     1. Resolve user via `BANK_EMAIL_USER_PHONE`

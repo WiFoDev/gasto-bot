@@ -2,7 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Mocks (hoisted before imports) ──────────────────────────────────
 
+const bankEmailConfig = vi.hoisted(() => ({ phone: '+51999888777' as string | undefined }));
+
 vi.mock('../../src/config.js', () => ({
+  get BANK_EMAIL_USER_PHONE() {
+    return bankEmailConfig.phone;
+  },
   CONFIDENCE_AUTO_LOG: 0.85,
   CONFIDENCE_CONFIRM: 0.6,
   STATE_TTL_MS: 300_000,
@@ -16,6 +21,10 @@ vi.mock('../../src/parse.js', () => ({
 
 vi.mock('../../src/parse-image.js', () => ({
   parseReceipt: vi.fn(),
+}));
+
+vi.mock('../../src/categorize-merchant.js', () => ({
+  categorizeMerchant: vi.fn(),
 }));
 
 vi.mock('../../src/storage.js', () => ({
@@ -44,9 +53,12 @@ vi.mock('../../src/db.js', () => ({
   insertRule: vi.fn(),
   getActiveRules: vi.fn(),
   deleteRule: vi.fn(),
+  getExpenseByBankReference: vi.fn(),
+  getLastExpenseByMerchant: vi.fn(),
 }));
 
-import { handleMessage as handleMessageReply } from '../../src/handler.js';
+import { handleMessage as handleMessageReply, handleBankEmail } from '../../src/handler.js';
+import { categorizeMerchant } from '../../src/categorize-merchant.js';
 
 // Most tests only care about the reply text; button tests use handleMessageReply.
 const handleMessage = async (
@@ -75,10 +87,13 @@ import {
   insertRule,
   getActiveRules,
   deleteRule,
+  getExpenseByBankReference,
+  getLastExpenseByMerchant,
 } from '../../src/db.js';
 import { getState, setState, clearState } from '../../src/state.js';
 import { formatHelp, formatError, formatUnknown, formatParseError, formatDatabaseError, formatNoExpenseToModify, formatReceiptUnclear, formatUnknownUser, formatExpenseCancelled, formatMerchantCorrection, formatCorrectionGeneric, formatButtonExpired, expenseConfirmButtons, newCategoryButtons, BUTTON_IDS } from '../../src/formatter.js';
 import type {
+  BankTransaction,
   User,
   Category,
   Expense,
@@ -3531,5 +3546,231 @@ describe('interactive confirm buttons', () => {
       expect(reply.text).toContain('✅');
       expect(mockedInsertExpense).toHaveBeenCalledOnce();
     });
+  });
+});
+
+// ── Bank email (TASK-71) ────────────────────────────────────────────
+
+describe('handleBankEmail', () => {
+  const mockedGetExpenseByBankReference = getExpenseByBankReference as ReturnType<typeof vi.fn>;
+  const mockedGetLastExpenseByMerchant = getLastExpenseByMerchant as ReturnType<typeof vi.fn>;
+  const mockedCategorizeMerchant = categorizeMerchant as ReturnType<typeof vi.fn>;
+
+  function makeTx(overrides: Partial<BankTransaction> = {}): BankTransaction {
+    return {
+      bank: 'bcp',
+      amount: 22.9,
+      currency: 'PEN',
+      merchant: 'DLC*UBER RIDES',
+      date: '2026-11-18',
+      time: '17:15',
+      card_last4: '1234',
+      operation_number: '0000812345',
+      raw_text: 'Realizaste un consumo de S/ 22.90…',
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    bankEmailConfig.phone = PHONE;
+    mockedGetExpenseByBankReference.mockResolvedValue(null);
+    mockedGetLastExpenseByMerchant.mockResolvedValue(null);
+    mockedCategorizeMerchant.mockResolvedValue({
+      category_slug: 'transport',
+      suggested_category_name: null,
+      description: 'Uber',
+      confidence: 0.95,
+    });
+  });
+
+  it('returns null and does nothing when BANK_EMAIL_USER_PHONE is unset', async () => {
+    bankEmailConfig.phone = undefined;
+    expect(await handleBankEmail(makeTx())).toBeNull();
+    expect(mockedGetUserByPhone).not.toHaveBeenCalled();
+    expect(mockedInsertExpense).not.toHaveBeenCalled();
+  });
+
+  it('returns null when the configured phone has no user', async () => {
+    mockedGetUserByPhone.mockResolvedValue(null);
+    expect(await handleBankEmail(makeTx())).toBeNull();
+    expect(mockedInsertExpense).not.toHaveBeenCalled();
+  });
+
+  it('is idempotent: a known bank reference sends no message and inserts nothing', async () => {
+    mockedGetExpenseByBankReference.mockResolvedValue(makeExpense({ bank_reference: 'bcp:0000812345' }));
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    expect(await handleBankEmail(makeTx())).toBeNull();
+
+    expect(mockedGetExpenseByBankReference).toHaveBeenCalledWith('user-1', 'bcp:0000812345');
+    expect(mockedInsertExpense).not.toHaveBeenCalled();
+    expect(mockedCategorizeMerchant).not.toHaveBeenCalled();
+    expect(logSpy.mock.calls.some(([l]) => String(l).includes('bank_email_duplicate'))).toBe(true);
+    logSpy.mockRestore();
+  });
+
+  it('treats a unique-violation race on insert as a duplicate', async () => {
+    mockedInsertExpense.mockRejectedValueOnce({ code: '23505', message: 'duplicate key value' });
+    expect(await handleBankEmail(makeTx())).toBeNull();
+    expect(getState(PHONE)).toBeNull();
+  });
+
+  it('rethrows other insert errors', async () => {
+    mockedInsertExpense.mockRejectedValueOnce({ code: '08006', message: 'connection failure' });
+    await expect(handleBankEmail(makeTx())).rejects.toMatchObject({ code: '08006' });
+  });
+
+  it('categorizer path: inserts an email expense with the raw merchant and clean description', async () => {
+    const reply = await handleBankEmail(makeTx());
+
+    expect(mockedGetLastExpenseByMerchant).toHaveBeenCalledWith('user-1', 'UBER RIDES');
+    expect(mockedCategorizeMerchant).toHaveBeenCalledWith('DLC*UBER RIDES', 22.9, 'PEN', mockCategories);
+    expect(mockedInsertExpense).toHaveBeenCalledWith({
+      user_id: 'user-1',
+      category_id: 'cat-transport',
+      amount: 22.9,
+      currency: 'PEN',
+      description: 'Uber',
+      merchant: 'DLC*UBER RIDES',
+      date: '2026-11-18',
+      source: 'email',
+      raw_input: 'Realizaste un consumo de S/ 22.90…',
+      image_url: null,
+      ai_confidence: 0.95,
+      payment_type: 'credit_card',
+      payment_method_name: 'BCP ***1234',
+      bank_reference: 'bcp:0000812345',
+    });
+    expect(reply).toContain('🏦 BCP');
+    expect(reply).toContain('Uber');
+    expect(reply).toContain('Transport');
+  });
+
+  it('merchant memory hit: reuses the last category and description, skips the categorizer', async () => {
+    mockedGetLastExpenseByMerchant.mockResolvedValue(
+      makeExpense({ category_id: 'cat-groceries', description: 'Wong Benavides', merchant: 'E WONG BENAVIDES' }),
+    );
+
+    const reply = await handleBankEmail(makeTx({ merchant: 'E WONG BENAVIDES', amount: 120 }));
+
+    expect(mockedCategorizeMerchant).not.toHaveBeenCalled();
+    expect(mockedInsertExpense).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category_id: 'cat-groceries',
+        description: 'Wong Benavides',
+        merchant: 'E WONG BENAVIDES',
+        ai_confidence: 1,
+      }),
+    );
+    expect(reply).toContain('Groceries');
+  });
+
+  it('merchant memory pointing at a deleted category falls through to the categorizer', async () => {
+    mockedGetLastExpenseByMerchant.mockResolvedValue(makeExpense({ category_id: 'cat-gone' }));
+    await handleBankEmail(makeTx());
+    expect(mockedCategorizeMerchant).toHaveBeenCalledOnce();
+    expect(mockedInsertExpense).toHaveBeenCalledWith(expect.objectContaining({ category_id: 'cat-transport' }));
+  });
+
+  it('low confidence falls back to other without asking', async () => {
+    mockedCategorizeMerchant.mockResolvedValue({
+      category_slug: 'transport',
+      suggested_category_name: null,
+      description: 'Xyz',
+      confidence: 0.4,
+    });
+
+    const reply = await handleBankEmail(makeTx({ merchant: 'XYZ 123' }));
+
+    expect(mockedInsertExpense).toHaveBeenCalledWith(
+      expect.objectContaining({ category_id: 'cat-other', description: 'Xyz', ai_confidence: 0.4 }),
+    );
+    expect(reply).not.toContain('¿');
+    expect(getState(PHONE)!.lastAction).toBe('expense_logged');
+  });
+
+  it('a new-category suggestion falls back to other (never blocks on a question)', async () => {
+    mockedCategorizeMerchant.mockResolvedValue({
+      category_slug: null,
+      suggested_category_name: 'Mascotas',
+      description: 'Pet Shop',
+      confidence: 0.9,
+    });
+
+    await handleBankEmail(makeTx({ merchant: 'PET SHOP LIMA' }));
+
+    expect(mockedInsertCategory).not.toHaveBeenCalled();
+    expect(mockedInsertExpense).toHaveBeenCalledWith(expect.objectContaining({ category_id: 'cat-other' }));
+  });
+
+  it('categorizer failure (null description) stores the raw merchant as description', async () => {
+    mockedCategorizeMerchant.mockResolvedValue({
+      category_slug: null,
+      suggested_category_name: null,
+      description: null,
+      confidence: 0,
+    });
+
+    await handleBankEmail(makeTx());
+
+    expect(mockedInsertExpense).toHaveBeenCalledWith(
+      expect.objectContaining({ category_id: 'cat-other', description: 'DLC*UBER RIDES', ai_confidence: 0 }),
+    );
+  });
+
+  it('keeps USD as USD', async () => {
+    const reply = await handleBankEmail(makeTx({ currency: 'USD', amount: 20 }));
+    expect(mockedInsertExpense).toHaveBeenCalledWith(expect.objectContaining({ currency: 'USD', amount: 20 }));
+    expect(reply).toContain('$20.00');
+  });
+
+  it('appends budget alerts', async () => {
+    mockedGetBudget.mockImplementation(async (_u: string, catId: string | null, period: string) =>
+      catId === 'cat-transport' && period === 'monthly'
+        ? makeBudget({ category_id: 'cat-transport', amount: 100 })
+        : null,
+    );
+    mockedGetExpensesTotal.mockResolvedValue(95);
+
+    const reply = await handleBankEmail(makeTx());
+
+    expect(reply).toContain('⚠️');
+  });
+
+  it('appends rule violations', async () => {
+    mockedGetActiveRules.mockResolvedValue([
+      makeRule({ name: 'Límite transporte', category_id: 'cat-transport', threshold: 10, period: 'monthly' }),
+    ]);
+    mockedGetExpensesTotal.mockResolvedValue(50);
+
+    const reply = await handleBankEmail(makeTx());
+
+    expect(reply).toContain('💸');
+  });
+
+  it('sets expense_logged state so "eso fue …" / "borra eso" target it', async () => {
+    await handleBankEmail(makeTx());
+
+    const state = getState(PHONE)!;
+    expect(state.lastAction).toBe('expense_logged');
+    expect(state.lastExpenseId).toBe('exp-new');
+    expect(state.pendingExpense).toBeNull();
+  });
+
+  it('"borra eso" from Kapso without "+" deletes the bank-email expense', async () => {
+    await handleBankEmail(makeTx());
+    mockedParseMessage.mockResolvedValue(makeParseResult({ intent: 'delete_expense' }));
+    mockedGetExpenseById.mockResolvedValue(makeExpense({ id: 'exp-new', category_id: 'cat-transport' }));
+
+    await handleMessage(PHONE.slice(1), 'text', 'borra eso');
+
+    expect(mockedSoftDeleteExpense).toHaveBeenCalledWith('exp-new');
+  });
+
+  it('normalizes a configured phone without the + prefix', async () => {
+    bankEmailConfig.phone = '51999888777';
+    await handleBankEmail(makeTx());
+    expect(mockedGetUserByPhone).toHaveBeenCalledWith(PHONE);
+    expect(getState(PHONE)!.lastExpenseId).toBe('exp-new');
   });
 });
