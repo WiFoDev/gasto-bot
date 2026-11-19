@@ -378,7 +378,7 @@
     on `normalizeMerchant(expenses.merchant)`. A star followed by a space
     (`ANTHROPIC* CLAUDE SUB`) is the merchant's own descriptor, not stripped
 
-- [ ] TASK-69: Merchant categorizer prompt + accuracy test 🚧 GATE #5
+- [x] TASK-69: Merchant categorizer prompt + accuracy test 🚧 GATE #5
   - Depends on: TASK-67
   - `src/prompts/merchant-categorizer.ts` + `src/categorize-merchant.ts`:
     ONE Claude call (same model/settings as `parse.ts`) with merchant,
@@ -392,6 +392,11 @@
   - `tests/integration/categorize-merchant.test.ts`
   - **GATE #5: ≥ 80% category accuracy on the merchant fixtures**. Gate
     blocks TASK-71
+  - **Result**: GATE #5 PASSED — 20/22 (90.9%) on the user's real 14
+    categories. Misses: `WL *STEAM PURCHASE` → suscripciones (expected
+    entertainment), `MDOPAGO*FREEPASS` → suscripciones (expected shopping —
+    a Mercado Libre printer). Labels by the user 2026-11-19; unknowable
+    merchants (store codes, LIMABLUE podologist) excluded from fixtures
 
 - [ ] TASK-70: Outbound WhatsApp module
   - Depends on: TASK-66

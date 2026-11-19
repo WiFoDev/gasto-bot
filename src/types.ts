@@ -283,6 +283,17 @@ export interface KeepAliveResult {
 
 // ── Bank-email ingestion ─────────────────────────────────────────
 
+/** Result of the single Claude call that categorizes a bank merchant. */
+export interface MerchantCategorization {
+  /** One of the user's slugs, or null (nothing fits / unsure). */
+  category_slug: string | null;
+  /** New-category suggestion when category_slug is null (Phase 1 contract). */
+  suggested_category_name: string | null;
+  /** Clean human name, e.g. "Uber", "Wong Benavides", "Amazon Prime". */
+  description: string | null;
+  confidence: number;
+}
+
 /** A card purchase extracted from a bank notification email. */
 export interface BankTransaction {
   bank: 'bcp';
