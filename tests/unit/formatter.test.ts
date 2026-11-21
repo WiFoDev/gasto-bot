@@ -1841,11 +1841,10 @@ describe('formatBankExpenseLogged', () => {
       ...overrides,
     });
 
-  it('shows bank, amount, clean name, category, card and a correction hint', () => {
+  it('matches the manual confirmation layout: amount — category, then name · date · card', () => {
     expect(formatBankExpenseLogged(bankExpense(), makeCategory(), tx)).toMatchInlineSnapshot(`
-      "🏦 BCP · S/34.00 en Sienna Bakery → 🍽 Food & Dining
-      💳 ***1234 · 18 nov
-      Para cambiarla: "eso fue <categoría>" · para eliminarla: "borra eso""
+      "🏦 S/34.00 — 🍽 Food & Dining
+      Sienna Bakery · 18 nov · BCP ***1234"
     `);
   });
 
@@ -1857,14 +1856,13 @@ describe('formatBankExpenseLogged', () => {
       usdTx,
     );
     expect(result).toMatchInlineSnapshot(`
-      "🏦 BCP · $20.00 en Anthropic → 🔁 Suscripciones
-      💳 ***1234 · 18 nov
-      Para cambiarla: "eso fue <categoría>" · para eliminarla: "borra eso""
+      "🏦 $20.00 — 🔁 Suscripciones
+      Anthropic · 18 nov · BCP ***1234"
     `);
   });
 
   it('falls back to the raw merchant when there is no description', () => {
     const result = formatBankExpenseLogged(bankExpense({ description: null }), makeCategory(), tx);
-    expect(result).toContain('en IZI*SIENNA BAKERY');
+    expect(result).toContain('IZI*SIENNA BAKERY ·');
   });
 });

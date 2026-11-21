@@ -162,6 +162,7 @@ export type LastAction =
   | 'awaiting_confirmation'
   | 'awaiting_category_confirmation'
   | 'expense_logged'
+  | 'awaiting_recategorize'
   | 'none';
 
 export interface PendingExpense {
@@ -212,7 +213,7 @@ export type MessageHandler = (
 ) => Promise<BotReply>;
 
 /** Registers a parsed bank email; returns the WhatsApp text, or null to stay silent. */
-export type BankEmailHandler = (tx: BankTransaction) => Promise<string | null>;
+export type BankEmailHandler = (tx: BankTransaction) => Promise<BotReply | null>;
 
 // ── Webhook ──────────────────────────────────────────────────────
 

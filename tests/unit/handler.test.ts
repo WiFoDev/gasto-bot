@@ -3641,9 +3641,10 @@ describe('handleBankEmail', () => {
       payment_method_name: 'BCP ***1234',
       bank_reference: 'bcp:0000812345',
     });
-    expect(reply).toContain('🏦 BCP');
-    expect(reply).toContain('Uber');
-    expect(reply).toContain('Transport');
+    expect(reply!.text).toContain('🏦 S/22.90');
+    expect(reply!.text).toContain('BCP ***1234');
+    expect(reply!.text).toContain('Uber');
+    expect(reply!.text).toContain('Transport');
   });
 
   it('merchant memory hit: reuses the last category and description, skips the categorizer', async () => {
@@ -3662,7 +3663,7 @@ describe('handleBankEmail', () => {
         ai_confidence: 1,
       }),
     );
-    expect(reply).toContain('Groceries');
+    expect(reply!.text).toContain('Groceries');
   });
 
   it('merchant memory pointing at a deleted category falls through to the categorizer', async () => {
@@ -3685,7 +3686,7 @@ describe('handleBankEmail', () => {
     expect(mockedInsertExpense).toHaveBeenCalledWith(
       expect.objectContaining({ category_id: 'cat-other', description: 'Xyz', ai_confidence: 0.4 }),
     );
-    expect(reply).not.toContain('¿');
+    expect(reply!.text).not.toContain('¿');
     expect(getState(PHONE)!.lastAction).toBe('expense_logged');
   });
 
@@ -3721,7 +3722,7 @@ describe('handleBankEmail', () => {
   it('keeps USD as USD', async () => {
     const reply = await handleBankEmail(makeTx({ currency: 'USD', amount: 20 }));
     expect(mockedInsertExpense).toHaveBeenCalledWith(expect.objectContaining({ currency: 'USD', amount: 20 }));
-    expect(reply).toContain('$20.00');
+    expect(reply!.text).toContain('$20.00');
   });
 
   it('appends budget alerts', async () => {
@@ -3734,7 +3735,7 @@ describe('handleBankEmail', () => {
 
     const reply = await handleBankEmail(makeTx());
 
-    expect(reply).toContain('⚠️');
+    expect(reply!.text).toContain('⚠️');
   });
 
   it('appends rule violations', async () => {
@@ -3745,7 +3746,7 @@ describe('handleBankEmail', () => {
 
     const reply = await handleBankEmail(makeTx());
 
-    expect(reply).toContain('💸');
+    expect(reply!.text).toContain('💸');
   });
 
   it('sets expense_logged state so "eso fue …" / "borra eso" target it', async () => {
@@ -3767,10 +3768,94 @@ describe('handleBankEmail', () => {
     expect(mockedSoftDeleteExpense).toHaveBeenCalledWith('exp-new');
   });
 
+  it('attaches Categoría / Borrar buttons bound to the new expense, no typed hint', async () => {
+    const reply = await handleBankEmail(makeTx());
+    expect(reply!.buttons).toEqual([
+      { id: 'bank_recategorize:exp-new', title: '✏️ Categoría' },
+      { id: 'bank_delete:exp-new', title: '🗑 Borrar' },
+    ]);
+    expect(reply!.text).not.toContain('eso fue');
+  });
+
   it('normalizes a configured phone without the + prefix', async () => {
     bankEmailConfig.phone = '51999888777';
     await handleBankEmail(makeTx());
     expect(mockedGetUserByPhone).toHaveBeenCalledWith(PHONE);
     expect(getState(PHONE)!.lastExpenseId).toBe('exp-new');
+  });
+});
+
+describe('bank expense buttons', () => {
+  const bankExpense = () =>
+    makeExpense({ id: 'exp-9', category_id: 'cat-transport', amount: 10.9, description: 'Uber', source: 'email' });
+
+  beforeEach(() => {
+    clearState(PHONE);
+    mockedGetExpenseById.mockImplementation(async (id: string) => (id === 'exp-9' ? bankExpense() : null));
+  });
+
+  it('🗑 Borrar deletes that expense even with no conversation state, without calling Claude', async () => {
+    const reply = await handleMessage(PHONE, 'button', 'bank_delete:exp-9');
+
+    expect(mockedSoftDeleteExpense).toHaveBeenCalledWith('exp-9');
+    expect(mockedParseMessage).not.toHaveBeenCalled();
+    expect(reply).toContain('Eliminado');
+  });
+
+  it('🗑 Borrar on an expense that no longer exists says so and deletes nothing', async () => {
+    const reply = await handleMessage(PHONE, 'button', 'bank_delete:exp-gone');
+
+    expect(mockedSoftDeleteExpense).not.toHaveBeenCalled();
+    expect(reply).toBe('Ese gasto ya no existe.');
+  });
+
+  it("ignores a button pointing at another user's expense", async () => {
+    mockedGetExpenseById.mockResolvedValue(makeExpense({ id: 'exp-9', user_id: 'user-2' }));
+
+    const reply = await handleMessage(PHONE, 'button', 'bank_delete:exp-9');
+
+    expect(mockedSoftDeleteExpense).not.toHaveBeenCalled();
+    expect(reply).toBe('Ese gasto ya no existe.');
+  });
+
+  it('✏️ Categoría asks which category, listing them, and remembers the expense', async () => {
+    const reply = await handleMessage(PHONE, 'button', 'bank_recategorize:exp-9');
+
+    expect(reply).toContain('¿A qué categoría');
+    expect(reply).toContain('🛒 Groceries');
+    expect(mockedParseMessage).not.toHaveBeenCalled();
+    const state = getState(PHONE)!;
+    expect(state.lastAction).toBe('awaiting_recategorize');
+    expect(state.lastExpenseId).toBe('exp-9');
+  });
+
+  it('answering with a category name recategorizes without calling Claude', async () => {
+    await handleMessage(PHONE, 'button', 'bank_recategorize:exp-9');
+
+    const reply = await handleMessage(PHONE, 'text', 'groceries');
+
+    expect(mockedUpdateExpense).toHaveBeenCalledWith('exp-9', { category_id: 'cat-groceries' });
+    expect(mockedParseMessage).not.toHaveBeenCalled();
+    expect(reply).toContain('Groceries');
+    expect(getState(PHONE)!.lastAction).toBe('expense_logged');
+  });
+
+  it('matches the category name ignoring case and accents', async () => {
+    await handleMessage(PHONE, 'button', 'bank_recategorize:exp-9');
+    await handleMessage(PHONE, 'text', '  GROCERIES ');
+    expect(mockedUpdateExpense).toHaveBeenCalledWith('exp-9', { category_id: 'cat-groceries' });
+  });
+
+  it('a free-text answer goes through the correction parser for that expense', async () => {
+    await handleMessage(PHONE, 'button', 'bank_recategorize:exp-9');
+    mockedParseMessage.mockResolvedValue(
+      makeParseResult({ intent: 'correct_expense', correction_field: 'category', category_slug: 'groceries', amount: null }),
+    );
+    mockedGetCategoryBySlug.mockResolvedValue(mockCategories.find((c) => c.slug === 'groceries'));
+
+    await handleMessage(PHONE, 'text', 'fue del super');
+
+    expect(mockedParseMessage).toHaveBeenCalledWith('eso fue fue del super', mockCategories);
+    expect(mockedUpdateExpense).toHaveBeenCalledWith('exp-9', { category_id: 'cat-groceries' });
   });
 });

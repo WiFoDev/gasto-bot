@@ -72,8 +72,9 @@ export function formatExpenseConfirmation(
 }
 
 /**
- * Confirmation for an expense registered from a forwarded bank email.
- * Unprompted, so it carries the card and a one-line hint on how to fix it.
+ * Confirmation for an expense registered from a forwarded bank email. Same
+ * layout as a manual confirmation, plus the card; fixes go through the
+ * buttons from `bankExpenseButtons`.
  */
 export function formatBankExpenseLogged(
   expense: Expense,
@@ -83,9 +84,8 @@ export function formatBankExpenseLogged(
   const amount = formatCurrency(expense.amount, expense.currency);
   const name = truncate(expense.description ?? expense.merchant ?? tx.merchant, MAX_DESCRIPTION_LENGTH);
   return [
-    `🏦 ${tx.bank.toUpperCase()} · ${amount} en ${name} → ${category.icon} ${category.name}`,
-    `💳 ***${tx.card_last4} · ${formatDate(expense.date)}`,
-    'Para cambiarla: "eso fue <categoría>" · para eliminarla: "borra eso"',
+    `🏦 ${amount} — ${category.icon} ${category.name}`,
+    `${name} · ${formatDate(expense.date)} · ${tx.bank.toUpperCase()} ***${tx.card_last4}`,
   ].join('\n');
 }
 
@@ -314,6 +314,32 @@ export const BUTTON_IDS = {
   categoryCreate: 'category_create',
   categoryOther: 'category_other',
 } as const;
+
+/**
+ * Bank-email buttons carry the expense id (`<prefix>:<id>`), so they keep
+ * working after the conversation moves on — the message is unprompted and
+ * may be read hours later.
+ */
+export const BANK_BUTTON_PREFIX = {
+  recategorize: 'bank_recategorize',
+  delete: 'bank_delete',
+} as const;
+
+export function bankExpenseButtons(expenseId: string): ReplyButton[] {
+  return [
+    { id: `${BANK_BUTTON_PREFIX.recategorize}:${expenseId}`, title: '✏️ Categoría' },
+    { id: `${BANK_BUTTON_PREFIX.delete}:${expenseId}`, title: '🗑 Borrar' },
+  ];
+}
+
+export function formatRecategorizePrompt(categories: Category[]): string {
+  const list = categories.map((c) => `${c.icon} ${c.name}`).join('\n');
+  return `¿A qué categoría lo paso? Escribe el nombre:\n${list}`;
+}
+
+export function formatBankExpenseGone(): string {
+  return 'Ese gasto ya no existe.';
+}
 
 export function expenseConfirmButtons(): ReplyButton[] {
   return [

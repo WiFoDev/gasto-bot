@@ -66,6 +66,10 @@ import {
   expenseConfirmButtons,
   newCategoryButtons,
   BUTTON_IDS,
+  BANK_BUTTON_PREFIX,
+  bankExpenseButtons,
+  formatRecategorizePrompt,
+  formatBankExpenseGone,
 } from './formatter.js';
 import { normalizeMerchant, slugify } from './utils.js';
 import { checkRules } from './rules.js';
@@ -847,6 +851,50 @@ const BUTTON_REPLIES: Record<string, { state: LastAction; text: string }> = {
   [BUTTON_IDS.categoryOther]: { state: 'awaiting_category_confirmation', text: 'no' },
 };
 
+function normalizeName(text: string): string {
+  return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+}
+
+/**
+ * Taps on the buttons of a bank-email confirmation (`<prefix>:<expenseId>`).
+ * Returns null when the id is not a bank button. Works without conversation
+ * state, but only on the user's own, non-deleted expenses.
+ */
+async function handleBankButton(
+  phone: string,
+  user: User,
+  categories: Category[],
+  buttonId: string,
+): Promise<string | null> {
+  const sep = buttonId.indexOf(':');
+  const prefix = sep === -1 ? buttonId : buttonId.slice(0, sep);
+  if (prefix !== BANK_BUTTON_PREFIX.delete && prefix !== BANK_BUTTON_PREFIX.recategorize) return null;
+
+  const expense = sep === -1 ? null : await getExpenseById(buttonId.slice(sep + 1));
+  if (!expense || expense.user_id !== user.id) return formatBankExpenseGone();
+
+  if (prefix === BANK_BUTTON_PREFIX.delete) {
+    const category = categories.find((c) => c.id === expense.category_id);
+    if (!category) return formatError();
+    const deleted = await softDeleteExpense(expense.id);
+    setState(phone, {
+      lastAction: 'expense_logged',
+      pendingExpense: null,
+      lastExpenseId: null,
+      updatedAt: Date.now(),
+    });
+    return formatDeletion(deleted, category);
+  }
+
+  setState(phone, {
+    lastAction: 'awaiting_recategorize',
+    pendingExpense: null,
+    lastExpenseId: expense.id,
+    updatedAt: Date.now(),
+  });
+  return formatRecategorizePrompt(categories);
+}
+
 function classifyError(error: unknown): string {
   if (typeof error === 'object' && error !== null) {
     const name = (error as { constructor?: { name?: string } }).constructor?.name ?? '';
@@ -929,11 +977,47 @@ async function handleMessageInner(
   // belongs to. A tap that doesn't match the current state (TTL expired, or a
   // button from an older prompt) is ignored and the state left untouched.
   if (type === 'button') {
+    const bankReply = await handleBankButton(phone, user, categories, content);
+    if (bankReply !== null) return bankReply;
+
     const button = BUTTON_REPLIES[content];
     if (!button || state?.lastAction !== button.state || !state.pendingExpense) {
       return formatButtonExpired();
     }
     content = button.text;
+  }
+
+  // 4c. Answer to "✏️ Categoría": an exact category name is applied directly;
+  // anything else goes through the parser as "eso fue …" for that expense.
+  if (state?.lastAction === 'awaiting_recategorize' && state.lastExpenseId) {
+    const wanted = normalizeName(content);
+    const match = categories.find(
+      (c) => normalizeName(c.name) === wanted || c.slug === slugify(wanted),
+    );
+    if (match) {
+      const expense = await getExpenseById(state.lastExpenseId);
+      if (!expense || expense.user_id !== user.id) {
+        clearState(phone);
+        return formatBankExpenseGone();
+      }
+      const oldCategory = categories.find((c) => c.id === expense.category_id);
+      if (!oldCategory) return formatError();
+      const updated = await updateExpense(expense.id, { category_id: match.id });
+      setState(phone, {
+        lastAction: 'expense_logged',
+        pendingExpense: null,
+        lastExpenseId: expense.id,
+        updatedAt: Date.now(),
+      });
+      return formatCorrection(updated, oldCategory, match);
+    }
+    setState(phone, {
+      lastAction: 'expense_logged',
+      pendingExpense: null,
+      lastExpenseId: state.lastExpenseId,
+      updatedAt: Date.now(),
+    });
+    content = `eso fue ${content.trim()}`;
   }
 
   // 5. Handle awaiting_description — treat reply as category or description
@@ -1278,7 +1362,7 @@ function isUniqueViolation(error: unknown): boolean {
  * uncertain is filed under `other` and the user corrects it with the existing
  * "eso fue …" / "borra eso" intents.
  */
-export async function handleBankEmail(tx: BankTransaction): Promise<string | null> {
+export async function handleBankEmail(tx: BankTransaction): Promise<BotReply | null> {
   const ref = bankReference(tx);
   const log = (event: string, extra: Record<string, unknown> = {}) =>
     console.log(JSON.stringify({ event, bankReference: ref, ...extra, timestamp: new Date().toISOString() }));
@@ -1359,7 +1443,7 @@ export async function handleBankEmail(tx: BankTransaction): Promise<string | nul
   }
   const { expense, category } = inserted;
 
-  // 6. Make the expense the target of "eso fue …" / "borra eso"
+  // 6. Make the expense the target of typed "eso fue …" / "borra eso"
   setState(toE164(user.phone), {
     lastAction: 'expense_logged',
     pendingExpense: null,
@@ -1369,5 +1453,8 @@ export async function handleBankEmail(tx: BankTransaction): Promise<string | nul
 
   // 5. Budget alerts and rule violations, same as manual entries
   const alerts = await getAllAlerts(user, expense, categories);
-  return appendAlerts(formatBankExpenseLogged(expense, category, tx), alerts);
+  return {
+    text: appendAlerts(formatBankExpenseLogged(expense, category, tx), alerts),
+    buttons: bankExpenseButtons(expense.id),
+  };
 }

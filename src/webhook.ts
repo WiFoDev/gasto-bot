@@ -156,9 +156,9 @@ const webhookPlugin: FastifyPluginAsync<WebhookPluginOptions> = async (
         operation_number: tx.operation_number,
       };
 
-      let text: string | null;
+      let botReply: BotReply | null;
       try {
-        text = await handleBankEmail(tx);
+        botReply = await handleBankEmail(tx);
       } catch (err) {
         log('bank_email_error', {
           ...txLog,
@@ -167,7 +167,7 @@ const webhookPlugin: FastifyPluginAsync<WebhookPluginOptions> = async (
         return reply.status(200).send({ status: 'error' });
       }
 
-      if (text === null) {
+      if (botReply === null) {
         // Duplicate or no configured user; handleBankEmail logged why.
         return reply.status(200).send({ status: 'ignored' });
       }
@@ -176,7 +176,7 @@ const webhookPlugin: FastifyPluginAsync<WebhookPluginOptions> = async (
 
       // Best-effort: the expense is registered even if WhatsApp fails.
       try {
-        await sendWhatsAppText(BANK_EMAIL_USER_PHONE!, text);
+        await sendBotReply(BANK_EMAIL_USER_PHONE!, botReply);
       } catch (err) {
         log('bank_notify_error', {
           ...txLog,

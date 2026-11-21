@@ -81,7 +81,10 @@ function makePayload(overrides: Record<string, unknown> = {}) {
 
 async function buildApp(
   handleMessage = vi.fn().mockResolvedValue({ text: 'OK logged' }),
-  handleBankEmail = vi.fn().mockResolvedValue('🏦 BCP · S/22.90 en Uber'),
+  handleBankEmail = vi.fn().mockResolvedValue({
+    text: '🏦 S/22.90 — 🚗 Transport',
+    buttons: [{ id: 'bank_delete:exp-1', title: '🗑 Borrar' }],
+  }),
 ) {
   const { default: webhookPlugin } = await import('../../src/webhook.js');
   const app = Fastify();
@@ -637,10 +640,11 @@ describe('POST /inbound/bank-email', () => {
       merchant: purchase.expected!.merchant,
       operation_number: purchase.expected!.operation_number,
     }));
-    expect(mockSendText).toHaveBeenCalledWith({
+    expect(mockSendInteractiveButtons).toHaveBeenCalledWith({
       phoneNumberId: 'pn_static',
       to: '+51999888777',
-      body: '🏦 BCP · S/22.90 en Uber',
+      bodyText: '🏦 S/22.90 — 🚗 Transport',
+      buttons: [{ id: 'bank_delete:exp-1', title: '🗑 Borrar' }],
     });
   });
 
@@ -692,6 +696,7 @@ describe('POST /inbound/bank-email', () => {
   });
 
   it('notify failure still answers 200 and logs bank_notify_error', async () => {
+    mockSendInteractiveButtons.mockRejectedValueOnce(new Error('Kapso 500'));
     mockSendText.mockRejectedValueOnce(new Error('Kapso 500'));
     const { app, handleBankEmail } = await buildApp();
 
