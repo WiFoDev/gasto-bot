@@ -451,7 +451,7 @@
   - Unit tests: `webhook.test.ts` (auth, wrong sender, non-consumo email,
     happy path, notify failure still 200, duplicate)
 
-- [ ] TASK-73: Cloudflare Email Worker + Gmail forwarding 🚧 GATE #6 (manual E2E)
+- [x] TASK-73: Cloudflare Email Worker + Gmail forwarding 🚧 GATE #6 (manual E2E)
   - Depends on: TASK-72
   - `infra/email-worker/worker.js` (~30 lines, no deps): reads
     `message.raw`, POSTs it to `INBOUND_URL` with `Authorization: Bearer`;
@@ -464,6 +464,11 @@
   - Manual step: deploy Worker, set `INBOUND_EMAIL_SECRET` on both sides
   - **GATE #6: a real BCP purchase produces a WhatsApp confirmation within
     60s, and the expense appears in `mis gastos hoy`.** Gate blocks TASK-74
+  - ✅ GATE #6 PASSED 2026-11-21: real Uber purchase → BCP email → WhatsApp
+    confirmation ~6s later, expense dated today. Earlier 6 purchases (Nov 20)
+    were registered but the WhatsApp send failed outside the 24h window
+    (Kapso error text: "Cannot send non-template messages outside the 24-hour
+    window.") → TASK-74 must match that message, not only code `131047`
 
 - [ ] TASK-74: Template fallback for the WhatsApp 24h window
   - Depends on: TASK-73

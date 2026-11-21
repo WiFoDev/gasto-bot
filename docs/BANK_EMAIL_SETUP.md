@@ -60,7 +60,9 @@ Use an unguessable address, literal rule only (no catch-all):
 4. Gmail → create filter:
    `from:notificaciones@notificacionesbcp.com.pe subject:"Realizaste un consumo"`
    → Forward to the routing address (keep "never send to spam").
-   Do **not** enable account-wide forwarding.
+   Do **not** enable account-wide forwarding. Tick the **checkbox** next to
+   "Forward it to" — choosing the address in the dropdown alone does not
+   enable it, and Gmail silently saves the filter without the forward.
 
 ## 5. Verify (GATE #6)
 
@@ -74,9 +76,10 @@ Use an unguessable address, literal rule only (no catch-all):
 
 | Symptom | Where to look |
 |---|---|
+| Nothing arrives, Worker idle | Gmail filter has no "Forward to" action (Settings → Filters) |
 | Nothing arrives | `wrangler tail`: `rejected sender` → `ALLOWED_FORWARDER` mismatch |
 | `status 401` in Worker log | Secret differs between Worker and Railway |
 | `{"status":"rejected"}` | Railway `bank_email_rejected` reason (`wrong_sender`, `invalid_mime`) |
 | `{"status":"skipped"}` | Not a credit-card consumo (debit, Yapeo, statements are out of scope) |
 | `{"status":"ignored"}` | Duplicate operation number, or `BANK_EMAIL_USER_PHONE` unset/unknown |
-| Expense logged, no WhatsApp | Railway `bank_notify_error`; outside the 24h window → see TASK-74 |
+| Expense logged, no WhatsApp | Railway `bank_notify_error` "outside the 24-hour window": no message to the bot in 24h → see TASK-74 |
